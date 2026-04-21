@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { db } from "./firebase";
-import { ref, onValue, update } from "firebase/database";
+import { ref, onValue, set as fbSet, get } from "firebase/database";
 
 /* ══════════════════════════════════════════
    디자인 시스템
@@ -94,14 +94,35 @@ const INIT_SS = {
   eventHistory:[],
 };
 
+function deepMerge(base, override) {
+  if (override === null || override === undefined) return override;
+  if (typeof override !== 'object' || Array.isArray(override)) return override;
+  const result = { ...base };
+  for (const key of Object.keys(override)) {
+    if (override[key] === null) {
+      result[key] = null;
+    } else if (
+      typeof override[key] === 'object' &&
+      !Array.isArray(override[key]) &&
+      typeof base[key] === 'object' &&
+      base[key] !== null
+    ) {
+      result[key] = deepMerge(base[key], override[key]);
+    } else {
+      result[key] = override[key];
+    }
+  }
+  return result;
+}
+
 const GAME_REF = ref(db, "game");
 
-const setShared = (fn) => {
-  onValue(GAME_REF, snapshot => {
-    const current = snapshot.val() || INIT_SS;
-    const next = { ...current, ...fn(current) };
-    update(GAME_REF, next);
-  }, { onlyOnce: true });
+const setShared = async (fn) => {
+  const snapshot = await get(GAME_REF);
+  const current = snapshot.val() || INIT_SS;
+  const next = fn(current);
+  const merged = deepMerge(current, next);
+  await fbSet(GAME_REF, merged);
 };
 
 const useShared = () => {
@@ -1041,15 +1062,82 @@ function UserApp(){
   /* ── 종료 ── */
   if(screen==="ended"){
     const fd=totalAsset()-initCash;
+    const rank = Object.entries(shared.teams||{}).map(([id,tm])=>{
+      const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
+        const st=shared.stocks?.find(x=>x.id===sid);
+        return acc+(st?st.prices[st.prices.length-1]*h.qty:0);
+      },0);
+      return{id,name:tm.name,total:tm.cash+sv};
+    }).sort((a,b)=>b.total-a.total);
+
+    const myRank = rank.findIndex(r=>r.id===teamId)+1;
+
     return <div style={W.wrap}>
-      <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,background:G.white,textAlign:"center"}}>
-        <div style={{fontSize:52,marginBottom:16}}>{fd>=0?"🎉":"😭"}</div>
-        <div style={{fontSize:24,fontWeight:800,color:G.black,marginBottom:4}}>게임 종료!</div>
-        <div style={{fontSize:14,color:G.gray1,marginBottom:24}}>{teamName}팀의 최종 결과</div>
-        <div style={{background:G.bg,borderRadius:18,padding:"22px 28px",width:"100%",maxWidth:280}}>
-          <div style={{fontSize:12,color:G.gray2,marginBottom:4}}>최종 총 자산</div>
-          <div style={{fontSize:26,fontWeight:800,color:G.black,marginBottom:6}}>{fmt(totalAsset())}</div>
-          <div style={{fontSize:15,fontWeight:600,color:fd>=0?G.red:G.blue}}>{fd>=0?"+":""}{fmt(fd)} ({fd>=0?"+":""}{((fd/initCash)*100).toFixed(2)}%)</div>
+      <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:G.white}}>
+        {/* 상단 결과 카드 */}
+        <div style={{background:`linear-gradient(135deg,${G.blue},${G.purple})`,padding:"40px 24px 32px",textAlign:"center"}}>
+          <div style={{fontSize:48,marginBottom:12}}>{fd>=0?"🏆":"📉"}</div>
+          <div style={{fontSize:22,fontWeight:800,color:G.white,marginBottom:4}}>게임 종료!</div>
+          <div style={{fontSize:14,color:"rgba(255,255,255,0.8)",marginBottom:20}}>{teamName}팀 최종 결과</div>
+          <div style={{background:"rgba(255,255,255,0.15)",borderRadius:16,padding:"16px 20px",display:"inline-block",minWidth:200}}>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:4}}>최종 총 자산</div>
+            <div style={{fontSize:28,fontWeight:800,color:G.white,marginBottom:4}}>{fmt(totalAsset())}</div>
+            <div style={{fontSize:15,fontWeight:600,color:fd>=0?"#FFD700":"#FF8080"}}>
+              {fd>=0?"+":""}{fmt(fd)} ({fd>=0?"+":""}{((fd/initCash)*100).toFixed(2)}%)
+            </div>
+          </div>
+          {myRank>0&&<div style={{marginTop:12,fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:600}}>
+            전체 {rank.length}팀 중 {myRank}위 {myRank===1?"🥇":myRank===2?"🥈":myRank===3?"🥉":""}
+          </div>}
+        </div>
+
+        {/* 내 포트폴리오 */}
+        <div style={{padding:"16px 16px 0"}}>
+          <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>내 최종 포트폴리오</div>
+          <div style={{background:G.white,borderRadius:14,overflow:"hidden",marginBottom:12,border:`1px solid ${G.border}`}}>
+            <div style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",borderBottom:`1px solid ${G.border}`}}>
+              <span style={{fontSize:13,color:G.gray1}}>보유 현금</span>
+              <span style={{fontSize:13,fontWeight:700,color:G.black}}>{fmt(cash)}</span>
+            </div>
+            {(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).length===0
+              ?<div style={{padding:"16px",textAlign:"center",color:G.gray2,fontSize:13}}>보유 종목 없음</div>
+              :(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).map(st=>{
+                const h=holdings[st.id];
+                const finalPrice=st.prices[st.prices.length-1];
+                const ev=finalPrice*h.qty;
+                const pnl=ev-h.avgPrice*h.qty;
+                return <div key={st.id} style={{padding:"12px 16px",borderBottom:`1px solid ${G.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <span style={{fontSize:13,fontWeight:600,color:G.black}}>{st.emoji} {st.name}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:pnl>=0?G.red:G.blue}}>{pnl>=0?"+":""}{fmt(pnl)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <span style={{fontSize:11,color:G.gray1}}>{h.qty}주 · 평단 {fmtN(h.avgPrice)}</span>
+                    <span style={{fontSize:11,color:G.gray1}}>평가 {fmt(ev)}</span>
+                  </div>
+                </div>;
+              })
+            }
+          </div>
+
+          {/* 전체 순위 */}
+          <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>전체 순위</div>
+          <div style={{background:G.white,borderRadius:14,overflow:"hidden",border:`1px solid ${G.border}`}}>
+            {rank.map((t,i)=>(
+              <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
+                borderBottom:i<rank.length-1?`1px solid ${G.border}`:"none",
+                background:t.id===teamId?"#EBF3FE":"transparent"}}>
+                <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,
+                  background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":G.gray4,
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:12,fontWeight:700,color:i<3?G.white:G.gray1}}>{i+1}</div>
+                <div style={{flex:1,fontSize:13,fontWeight:t.id===teamId?700:500,color:G.black}}>
+                  {t.name} {t.id===teamId?"(나)":""}
+                </div>
+                <div style={{fontSize:13,fontWeight:700,color:G.black}}>{fmt(t.total)}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>;
