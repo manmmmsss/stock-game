@@ -346,7 +346,7 @@ function AdminApp(){
   const [newTeamPw,setNewTeamPw]=useState("");
 
   /* 종목 */
-  const addStock=()=>setStocks(p=>[...p,{id:uid(),name:"새 종목",code:"000000",emoji:"🏦",prices:Array(maxRound).fill(100000)}]);
+  const addStock=()=>setStocks(p=>[...p,{id:uid(),name:"새 종목",code:"000000",emoji:"🏦",prices:Array(maxRound).fill(100000),totalSupply:0}]);
   const delStock=id=>setStocks(p=>p.filter(s=>s.id!==id));
   const updStock=(id,k,v)=>setStocks(p=>p.map(s=>s.id===id?{...s,[k]:v}:s));
   const updPrice=(id,ri,v)=>setStocks(p=>p.map(s=>s.id===id?{...s,prices:s.prices.map((x,i)=>i===ri?parseInt(v)||0:x)}:s));
@@ -675,6 +675,13 @@ function AdminApp(){
                         <NumInput value={s.prices[ri]??0} onChange={e=>updPrice(s.id,ri,e.target.value)}/>
                       </div>
                     ))}
+                  </div>
+                  <div style={{marginTop:6}}>
+                    <div style={{fontSize:10,color:G.gray2,marginBottom:3,fontWeight:500}}>총 발행량 (0=무제한)</div>
+                    <NumInput value={s.totalSupply||0}
+                      onChange={e=>updStock(s.id,"totalSupply",parseInt(e.target.value)||0)}
+                      style={{textAlign:"left"}}
+                      placeholder="0=무제한"/>
                   </div>
                 </div>
               ))}
@@ -1027,29 +1034,54 @@ function UserApp(){
     setScreen("main");
   };
 
-  const updTeam=fn=>setShared(s=>({...s,teams:{...s.teams,[teamId]:fn(s.teams[teamId])}}));
+  const updTeam = async (fn) => {
+    await setShared(s => {
+      const currentTeam = s.teams?.[teamId] || { name: teamName, cash: s.initCash || DEFAULT_INIT_CASH, holdings: {}, purchases: [] };
+      const updatedTeam = fn(currentTeam);
+      return { ...s, teams: { ...s.teams, [teamId]: updatedTeam } };
+    });
+  };
   const orderPrice=detail?getLivePrice(detail):0;
 
-  const doOrder=()=>{
-    if(shared.phase!=="round"){t2("현재 매매 시간이 아닙니다");setConfirm(false);return;}
-    const s=detail;
-    const cur=orderPrice;
-    const cost=cur*qty;
-    if(orderSide==="buy"){
-      if(cost>cash){t2("잔액이 부족합니다");setConfirm(false);return;}
-      updTeam(t=>{
-        const h=t.holdings[s.id]||{qty:0,avgPrice:0};
-        const nq=h.qty+qty,na=Math.round((h.avgPrice*h.qty+cur*qty)/nq);
-        return{...t,cash:t.cash-cost,holdings:{...t.holdings,[s.id]:{qty:nq,avgPrice:na}}};
+  const doOrder = async () => {
+    if(shared.phase !== "round") { t2("현재 매매 시간이 아닙니다"); setConfirm(false); return; }
+    const s = detail;
+    const cur = orderPrice;
+    const cost = cur * qty;
+
+    if(orderSide === "buy") {
+      if(cost > cash) { t2("잔액이 부족합니다"); setConfirm(false); return; }
+      // 종목 총 발행량 체크
+      const stockInfo = shared.stocks?.find(x => x.id === s.id);
+      const totalIssued = stockInfo?.totalSupply || 0;
+      if(totalIssued > 0) {
+        const allHoldings = Object.values(shared.teams || {}).reduce((acc, tm) => {
+          return acc + (tm.holdings?.[s.id]?.qty || 0);
+        }, 0);
+        if(allHoldings + qty > totalIssued) {
+          t2(`매수 가능 수량 초과 (남은 수량: ${totalIssued - allHoldings}주)`);
+          setConfirm(false);
+          return;
+        }
+      }
+      await updTeam(t => {
+        const h = t.holdings?.[s.id] || { qty: 0, avgPrice: 0 };
+        const nq = h.qty + qty;
+        const na = Math.round((h.avgPrice * h.qty + cur * qty) / nq);
+        return { ...t, cash: t.cash - cost, holdings: { ...t.holdings, [s.id]: { qty: nq, avgPrice: na } } };
       });
       t2(`${s.name} ${qty}주 매수 완료`);
     } else {
-      const h=holdings[s.id];
-      if(!h||h.qty<qty){t2("보유 수량 부족");setConfirm(false);return;}
-      updTeam(t=>({...t,cash:t.cash+cost,holdings:{...t.holdings,[s.id]:{...t.holdings[s.id],qty:t.holdings[s.id].qty-qty}}}));
+      const h = holdings[s.id];
+      if(!h || h.qty < qty) { t2("보유 수량 부족"); setConfirm(false); return; }
+      await updTeam(t => {
+        const newQty = (t.holdings?.[s.id]?.qty || 0) - qty;
+        return { ...t, cash: t.cash + cost, holdings: { ...t.holdings, [s.id]: { ...t.holdings?.[s.id], qty: newQty } } };
+      });
       t2(`${s.name} ${qty}주 매도 완료`);
     }
-    setQty(1);setConfirm(false);
+    setQty(1);
+    setConfirm(false);
   };
 
   const buyShop=item=>{
@@ -1220,6 +1252,17 @@ function UserApp(){
           <div style={{fontSize:11,color:G.gray2,marginBottom:8,fontWeight:500}}>실시간 가격 추이</div>
           <LiveBigChart stock={st} round={round} maxRound={maxRound} roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt} activeEvent={shared.activeEvent}/>
         </div>
+        {(()=>{
+          const stockInfo = shared.stocks?.find(x=>x.id===detail?.id);
+          const totalSupply = stockInfo?.totalSupply || 0;
+          if(totalSupply === 0) return null;
+          const allHeld = Object.values(shared.teams||{}).reduce((acc,tm)=>acc+(tm.holdings?.[detail?.id]?.qty||0),0);
+          const remaining = totalSupply - allHeld;
+          return <div style={{background:G.yellowLight,borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontSize:12,color:G.yellow,fontWeight:600}}>📦 총 발행량</span>
+            <span style={{fontSize:12,fontWeight:700,color:G.black}}>{remaining}/{totalSupply}주 남음</span>
+          </div>;
+        })()}
         {holding>0&&<div style={{background:G.white,padding:"13px 18px",marginBottom:8,display:"flex",justifyContent:"space-between"}}>
           <div><div style={{fontSize:11,color:G.gray2,marginBottom:2}}>보유</div><div style={{fontSize:15,fontWeight:700,color:G.black}}>{holding}주</div></div>
           <div><div style={{fontSize:11,color:G.gray2,marginBottom:2}}>평단</div><div style={{fontSize:15,fontWeight:700,color:G.black}}>{fmtN(avgPrice)}</div></div>
