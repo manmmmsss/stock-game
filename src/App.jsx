@@ -94,44 +94,56 @@ const INIT_SS = {
   eventHistory:[],
 };
 
-function deepMerge(base, override) {
-  if (override === null || override === undefined) return override;
-  if (typeof override !== 'object' || Array.isArray(override)) return override;
-  const result = { ...base };
-  for (const key of Object.keys(override)) {
-    if (override[key] === null) {
-      result[key] = null;
-    } else if (
-      typeof override[key] === 'object' &&
-      !Array.isArray(override[key]) &&
-      typeof base[key] === 'object' &&
-      base[key] !== null
-    ) {
-      result[key] = deepMerge(base[key], override[key]);
-    } else {
-      result[key] = override[key];
-    }
+const GAME_REF = ref(db, "game");
+
+// Firebase는 undefined를 저장 못하므로 제거
+function removeUndefined(obj) {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(removeUndefined);
+  const result = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) result[k] = removeUndefined(v);
   }
   return result;
 }
 
-const GAME_REF = ref(db, "game");
-
 const setShared = async (fn) => {
-  const snapshot = await get(GAME_REF);
-  const current = snapshot.val() || INIT_SS;
-  const next = fn(current);
-  const merged = deepMerge(current, next);
-  await fbSet(GAME_REF, merged);
+  try {
+    const snapshot = await get(GAME_REF);
+    const current = snapshot.val() || { ...INIT_SS };
+    const next = fn(current);
+    // teams, holdings 같은 중첩 객체는 완전 교체
+    const merged = { ...current, ...next };
+    await fbSet(GAME_REF, removeUndefined(merged));
+  } catch(e) {
+    console.error("Firebase setShared error:", e);
+  }
 };
 
 const useShared = () => {
-  const [s, set] = useState(INIT_SS);
+  const [s, set] = useState({ ...INIT_SS });
   useEffect(() => {
     const unsub = onValue(GAME_REF, snapshot => {
       const val = snapshot.val();
-      if (val) set(val);
-      else set(INIT_SS);
+      if (val) {
+        // stocks 배열이 객체로 변환되는 Firebase 버그 방지
+        if (val.stocks && !Array.isArray(val.stocks)) {
+          val.stocks = Object.values(val.stocks);
+        }
+        if (val.shopItems && !Array.isArray(val.shopItems)) {
+          val.shopItems = Object.values(val.shopItems);
+        }
+        if (val.rounds && !Array.isArray(val.rounds)) {
+          val.rounds = Object.values(val.rounds);
+        }
+        if (val.eventPresets && !Array.isArray(val.eventPresets)) {
+          val.eventPresets = Object.values(val.eventPresets);
+        }
+        set(val);
+      } else {
+        set({ ...INIT_SS });
+      }
     });
     return () => unsub();
   }, []);
