@@ -68,6 +68,13 @@ const useShared = () => {
         if (val.rounds && !Array.isArray(val.rounds)) val.rounds = Object.values(val.rounds);
         if (val.eventPresets && !Array.isArray(val.eventPresets)) val.eventPresets = Object.values(val.eventPresets);
         if (val.customTemplates && !Array.isArray(val.customTemplates)) val.customTemplates = Object.values(val.customTemplates);
+        if (val.priceHistory) {
+          for (const sid of Object.keys(val.priceHistory)) {
+            if (val.priceHistory[sid] && !Array.isArray(val.priceHistory[sid])) {
+              val.priceHistory[sid] = Object.values(val.priceHistory[sid]);
+            }
+          }
+        }
         set(val);
       } else {
         set({ ...INIT_SS });
@@ -346,86 +353,89 @@ function useAutoEventAndHistory(shared) {
   useEffect(() => {
     if (shared.phase !== "round") return;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       const now = Date.now();
-
-      // 1. 가격 히스토리 기록 (10초마다)
       if (!shared.roundStartedAt) return;
-      const elapsed = now - shared.roundStartedAt;
-      if (elapsed % 2000 < 600) {
-        const newHistory = { ...(shared.priceHistory || {}) };
-        (shared.stocks || []).forEach(stock => {
-          const price = getCurrentPrice(
-            stock, shared.round,
-            shared.roundStartedAt, shared.roundEndsAt,
-            shared.activeEvent, shared.modifiedTargets
-          );
-          if (!newHistory[stock.id]) newHistory[stock.id] = [];
-          newHistory[stock.id] = [
-            ...newHistory[stock.id].slice(-300),
-            { t: now, price }
-          ];
-        });
-        setShared(s => ({ ...s, priceHistory: newHistory }));
+
+      // ── 1. 가격 히스토리 기록 (2초마다) ──
+      const newHistory = {};
+      (shared.stocks || []).forEach(stock => {
+        const price = getCurrentPrice(
+          stock, shared.round,
+          shared.roundStartedAt, shared.roundEndsAt,
+          shared.activeEvent, shared.modifiedTargets
+        );
+        const existing = Array.isArray(shared.priceHistory?.[stock.id])
+          ? shared.priceHistory[stock.id]
+          : [];
+        newHistory[stock.id] = [...existing.slice(-299), { t: now, price }];
+      });
+
+      // ── 2. 자동 이벤트 체크 ──
+      let eventUpdate = {};
+      if (shared.nextAutoEventAt && now >= shared.nextAutoEventAt) {
+        const autoEvents = (shared.eventPresets || []).filter(e => e.autoTrigger);
+        if (autoEvents.length > 0) {
+          const triggered = autoEvents.filter(e => Math.random() * 100 < (e.probability || 50));
+          const ev = triggered.length > 0
+            ? triggered[Math.floor(Math.random() * triggered.length)]
+            : null;
+
+          if (ev) {
+            const newMod = { ...(shared.modifiedTargets || {}) };
+            if (ev.affectTarget !== false) {
+              (shared.stocks || []).forEach(stock => {
+                const eff = ev.stockEffects?.[stock.id] ?? ev.globalEffect ?? 0;
+                if (eff === 0) return;
+                const ri = Math.min(shared.round - 1, stock.prices.length - 1);
+                const base = newMod[stock.id]?.round === shared.round
+                  ? newMod[stock.id].modifiedPrice
+                  : stock.prices[ri];
+                newMod[stock.id] = {
+                  round: shared.round,
+                  originalPrice: stock.prices[ri],
+                  modifiedPrice: Math.max(Math.round(base * (1 + eff / 100)), 1),
+                };
+              });
+            }
+            const minMs = (ev.triggerIntervalMin || 1) * 60 * 1000;
+            const maxMs = (ev.triggerIntervalMax || 3) * 60 * 1000;
+            eventUpdate = {
+              activeEvent: { ...ev, appliedAt: now },
+              eventHistory: [...(shared.eventHistory || []), { ...ev, appliedAt: now }],
+              modifiedTargets: newMod,
+              nextAutoEventAt: now + minMs + Math.random() * (maxMs - minMs),
+            };
+            if (ev.duration > 0) {
+              setTimeout(() => {
+                setShared(s => ({ ...s, activeEvent: null }));
+              }, ev.duration * 1000);
+            }
+          } else {
+            const ev2 = autoEvents[0];
+            const minMs = (ev2.triggerIntervalMin || 1) * 60 * 1000;
+            const maxMs = (ev2.triggerIntervalMax || 3) * 60 * 1000;
+            eventUpdate = { nextAutoEventAt: now + minMs + Math.random() * (maxMs - minMs) };
+          }
+        }
       }
 
-      // 2. 자동 이벤트 발동 체크
-      if (!shared.nextAutoEventAt || now < shared.nextAutoEventAt) return;
-
-      const autoEvents = (shared.eventPresets || []).filter(e => e.autoTrigger);
-      if (autoEvents.length === 0) return;
-
-      const triggered = autoEvents.filter(e => Math.random() * 100 < (e.probability || 50));
-      if (triggered.length === 0) {
-        const picked = autoEvents[Math.floor(Math.random() * autoEvents.length)];
-        const minMs = (picked.triggerIntervalMin || 1) * 60 * 1000;
-        const maxMs = (picked.triggerIntervalMax || 3) * 60 * 1000;
-        const nextMs = minMs + Math.random() * (maxMs - minMs);
-        setShared(s => ({ ...s, nextAutoEventAt: now + nextMs }));
-        return;
-      }
-
-      const ev = triggered[Math.floor(Math.random() * triggered.length)];
-
-      // 목표가 수정
-      const newModified = { ...(shared.modifiedTargets || {}) };
-      if (ev.affectTarget !== false) {
-        (shared.stocks || []).forEach(stock => {
-          const eff = ev.stockEffects?.[stock.id] ?? ev.globalEffect ?? 0;
-          if (eff === 0) return;
-          const ri = Math.min(shared.round - 1, stock.prices.length - 1);
-          const base = newModified[stock.id]?.round === shared.round
-            ? newModified[stock.id].modifiedPrice
-            : stock.prices[ri];
-          newModified[stock.id] = {
-            round: shared.round,
-            originalPrice: stock.prices[ri],
-            modifiedPrice: Math.max(Math.round(base * (1 + eff / 100)), 1),
-          };
-        });
-      }
-
-      const minMs = (ev.triggerIntervalMin || 1) * 60 * 1000;
-      const maxMs = (ev.triggerIntervalMax || 3) * 60 * 1000;
-      const nextMs = minMs + Math.random() * (maxMs - minMs);
-
+      // ── 3. 한 번에 저장 ──
       setShared(s => ({
         ...s,
-        activeEvent: { ...ev, appliedAt: now },
-        eventHistory: [...(s.eventHistory || []), { ...ev, appliedAt: now }],
-        modifiedTargets: newModified,
-        nextAutoEventAt: now + nextMs,
+        priceHistory: newHistory,
+        ...eventUpdate,
       }));
 
-      if (ev.duration > 0) {
-        setTimeout(() => {
-          setShared(s => ({ ...s, activeEvent: null }));
-        }, ev.duration * 1000);
-      }
-    }, 1500);
+    }, 2000);
 
     return () => clearInterval(interval);
-  }, [shared.phase, shared.nextAutoEventAt, shared.roundStartedAt]);
+  }, [
+    shared.phase,
+    shared.round,
+    shared.roundStartedAt,
+    shared.nextAutoEventAt,
+  ]);
 }
 
 /* ══════════════════════════════════════════
@@ -568,9 +578,10 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
   }
 
   // 2. 현재 라운드: 히스토리 기반 다수 캔들
-  const history = (priceHistory?.[stock.id] || []).filter(p =>
-    roundStartedAt && p.t >= roundStartedAt
-  );
+  const rawHistory = priceHistory?.[stock.id];
+  const history = Array.isArray(rawHistory)
+    ? rawHistory.filter(p => roundStartedAt && p.t >= roundStartedAt)
+    : [];
   // 현재가 항상 마지막에 추가
   const allPts = [...history.map(p => p.price)];
   if (allPts.length === 0 || allPts[allPts.length - 1] !== curPrice) allPts.push(curPrice);
