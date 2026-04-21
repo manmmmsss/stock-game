@@ -2,6 +2,36 @@ import { useState, useEffect, useCallback } from "react";
 import { db } from "./firebase";
 import { ref, onValue, set as fbSet, get } from "firebase/database";
 
+const injectGlobal = () => {
+  if (document.getElementById('sg-global')) return;
+  const style = document.createElement('style');
+  style.id = 'sg-global';
+  style.textContent = `
+    *, *::before, *::after { box-sizing: border-box; }
+    html { overflow-x: hidden; }
+    body {
+      margin: 0; padding: 0; overflow-x: hidden;
+      background: #F2F4F6;
+      font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+      -webkit-text-size-adjust: 100%;
+    }
+    input, button, select, textarea { font-family: inherit; }
+    * { -webkit-tap-highlight-color: transparent; }
+  `;
+  document.head.appendChild(style);
+};
+injectGlobal();
+
+const WRAP = {
+  background: "#FFFFFF",
+  minHeight: "100dvh",
+  width: "100%",
+  maxWidth: "430px",
+  margin: "0 auto",
+  position: "relative",
+  overflowX: "hidden",
+};
+
 const GAME_REF = ref(db, "game");
 
 function removeUndefined(obj) {
@@ -638,8 +668,8 @@ function AdminApp(){
   const allTemplates=[...BUILT_IN_TEMPLATES,...(shared.customTemplates||[])];
 
   return(
-    <div style={{background:G.bg,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
-      <div style={{background:G.white,padding:"14px 16px 0",borderBottom:`1px solid ${G.border}`,position:"sticky",top:0,zIndex:50}}>
+    <div style={{...WRAP,background:G.bg}}>
+      <div style={{background:G.white,padding:"env(safe-area-inset-top, 14px) 16px 0",borderBottom:`1px solid ${G.border}`,position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
           <div style={{background:G.black,color:G.white,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>ADMIN</div>
           <span style={{fontSize:16,fontWeight:800,color:G.black}}>운영자 패널</span>
@@ -654,7 +684,7 @@ function AdminApp(){
         </div>
       </div>
 
-      <div style={{padding:"14px 14px 100px"}}>
+      <div style={{padding:"14px 14px env(safe-area-inset-bottom, 100px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
 
         {/* ══ 진행 탭 ══ */}
         {tab==="control"&&<>
@@ -1328,7 +1358,7 @@ function UserApp(){
 
   const total=totalAsset(),diff=total-initCash,diffPct=((diff/initCash)*100).toFixed(2);
   const stockVal=total-cash;
-  const W={wrap:{background:G.bg,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}};
+  const W={wrap:{...WRAP,background:G.bg}};
 
   /* ── 로그인 ── */
   if(screen==="login") return(
@@ -1428,7 +1458,7 @@ function UserApp(){
       <div style={W.wrap}>
         <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
           side={orderSide} stock={st} qty={effectiveQty} price={displayPrice||0} fee={feeRate} leverage={leverage}/>
-        <div style={{background:G.white,padding:"14px 18px 16px",position:"sticky",top:0,zIndex:50,borderBottom:`1px solid ${G.border}`}}>
+        <div style={{background:G.white,padding:"env(safe-area-inset-top, 14px) 18px 16px",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
           {shared.notice&&<div style={{marginBottom:8}}><NoticeBanner notice={shared.notice}/></div>}
           {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent}/></div>}
           <div onClick={()=>setScreen("main")} style={{fontSize:13,color:G.gray1,marginBottom:8,cursor:"pointer"}}>← 뒤로</div>
@@ -1445,7 +1475,7 @@ function UserApp(){
           {shared.phase!=="round"&&<div style={{marginTop:4,fontSize:12,color:G.red,fontWeight:500}}>🔴 매매 시간이 아닙니다</div>}
           {st.listed===false&&<div style={{marginTop:4,fontSize:12,color:G.red,fontWeight:500}}>⛔ 폐지된 종목입니다</div>}
         </div>
-        <div style={{paddingBottom:100}}>
+        <div style={{paddingBottom:"env(safe-area-inset-bottom, 100px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
           <div style={{background:G.white,padding:"14px 18px 8px",marginBottom:8}}>
             <div style={{fontSize:11,color:G.gray2,marginBottom:8,fontWeight:500}}>가격 추이</div>
             <LiveBigChart stock={st} round={round} maxRound={maxRound}
@@ -1523,7 +1553,7 @@ function UserApp(){
     <div style={W.wrap}>
       <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
         side={orderSide} stock={detail} qty={effectiveQty} price={orderPrice} fee={feeRate} leverage={leverage}/>
-      <div style={{background:G.white,padding:"16px 18px 0",position:"sticky",top:0,zIndex:50,borderBottom:`1px solid ${G.border}`}}>
+      <div style={{background:G.white,padding:"env(safe-area-inset-top, 16px) 18px 0",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
         {shared.notice&&<div style={{marginBottom:8}}><NoticeBanner notice={shared.notice}/></div>}
         {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent}/></div>}
         {isBlind&&<div style={{background:G.purpleLight,padding:"6px 14px",marginBottom:8,borderRadius:8}}>
@@ -1554,7 +1584,7 @@ function UserApp(){
         </div>
       </div>
 
-      <div style={{paddingBottom:24}}>
+      <div style={{paddingBottom:"env(safe-area-inset-bottom, 24px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
         {tab==="market"&&<>
           <div style={{padding:"10px 18px 5px",fontSize:12,color:G.gray1,fontWeight:500}}>
             종목 현황 {shared.phase==="round"?`· Round ${shared.round}`:""}
@@ -1691,9 +1721,7 @@ function AdminLogin({onSuccess}){
   const [pw,setPw]=useState(""),[ err,setErr]=useState(false);
   const check=()=>{if(pw===ADMIN_PW)onSuccess();else setErr(true);};
   return(
-    <div style={{background:G.white,minHeight:"100vh",maxWidth:430,margin:"0 auto",
-      display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px",
-      fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
+    <div style={{...WRAP,display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px"}}>
       <div style={{fontSize:26,fontWeight:800,color:G.black,marginBottom:8}}>운영자 로그인 🔐</div>
       <div style={{fontSize:14,color:G.gray1,marginBottom:24}}>관리자 비밀번호를 입력하세요</div>
       <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} placeholder="비밀번호"
@@ -1714,9 +1742,7 @@ export default function App(){
   if(mode==="admin"){if(!auth)return <AdminLogin onSuccess={()=>setAuth(true)}/>;return <AdminApp/>;};
   if(mode==="user") return <UserApp/>;
   return(
-    <div style={{background:G.white,minHeight:"100vh",maxWidth:430,margin:"0 auto",
-      display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px",
-      fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
+    <div style={{...WRAP,display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px"}}>
       <div style={{marginBottom:48}}>
         <div style={{fontSize:34,fontWeight:800,color:G.black,marginBottom:8,letterSpacing:-1}}>로(路)<br/>주식 게임</div>
         <div style={{fontSize:15,color:G.gray1,lineHeight:1.7}}>접속할 화면을 선택하세요</div>
