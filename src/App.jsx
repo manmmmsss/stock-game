@@ -179,13 +179,14 @@ const BUILT_IN_TEMPLATES=[
   },
 ];
 
+const DEFAULT_EVENT_AUTO={autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:3,probability:50,duration:60,affectTarget:true};
 const makeEventPresets=()=>[
-  {id:uid(),name:"코로나 팬데믹",emoji:"🦠",desc:"전 세계 봉쇄령 발동",globalEffect:-15,stockEffects:{},note:"항공·소비재 급락"},
-  {id:uid(),name:"전쟁 발발",emoji:"⚔️",desc:"지정학적 리스크 고조",globalEffect:-10,stockEffects:{},note:"방산 급등, 성장주 급락"},
-  {id:uid(),name:"AI 혁명 발표",emoji:"🤖",desc:"초거대 AI 모델 공개",globalEffect:+10,stockEffects:{},note:"기술주 전반 급등"},
-  {id:uid(),name:"중앙은행 양적완화",emoji:"🏦",desc:"긴급 유동성 3조 달러",globalEffect:+15,stockEffects:{},note:"전 종목 반등"},
-  {id:uid(),name:"금리 인상 쇼크",emoji:"📉",desc:"연준 긴급 금리 0.75% 인상",globalEffect:-12,stockEffects:{},note:"성장주 급락"},
-  {id:uid(),name:"대규모 스캔들",emoji:"💣",desc:"분식회계 발각",globalEffect:-20,stockEffects:{},note:"섹터 신뢰 붕괴"},
+  {id:uid(),name:"코로나 팬데믹",emoji:"🦠",desc:"전 세계 봉쇄령 발동",globalEffect:-15,stockEffects:{},note:"항공·소비재 급락",...DEFAULT_EVENT_AUTO},
+  {id:uid(),name:"전쟁 발발",emoji:"⚔️",desc:"지정학적 리스크 고조",globalEffect:-10,stockEffects:{},note:"방산 급등, 성장주 급락",...DEFAULT_EVENT_AUTO},
+  {id:uid(),name:"AI 혁명 발표",emoji:"🤖",desc:"초거대 AI 모델 공개",globalEffect:+10,stockEffects:{},note:"기술주 전반 급등",...DEFAULT_EVENT_AUTO},
+  {id:uid(),name:"중앙은행 양적완화",emoji:"🏦",desc:"긴급 유동성 3조 달러",globalEffect:+15,stockEffects:{},note:"전 종목 반등",...DEFAULT_EVENT_AUTO},
+  {id:uid(),name:"금리 인상 쇼크",emoji:"📉",desc:"연준 긴급 금리 0.75% 인상",globalEffect:-12,stockEffects:{},note:"성장주 급락",...DEFAULT_EVENT_AUTO},
+  {id:uid(),name:"대규모 스캔들",emoji:"💣",desc:"분식회계 발각",globalEffect:-20,stockEffects:{},note:"섹터 신뢰 붕괴",...DEFAULT_EVENT_AUTO},
 ];
 
 const ADMIN_PW="admin1234";
@@ -217,6 +218,9 @@ const INIT_SS={
   eventHistory:[],
   notice:"",
   noticeAt:null,
+  modifiedTargets: {},
+  nextAutoEventAt: null,
+  priceHistory: {},
 };
 
 
@@ -224,25 +228,118 @@ const INIT_SS={
 /* ══════════════════════════════════════════
    실시간 주가 계산 (선형보간 + 노이즈)
 ══════════════════════════════════════════ */
-function getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent){
-  if(!stock||round<1) return stock?.prices?.[0]??0;
-  const ri=Math.min(round-1,stock.prices.length-1);
-  const target=stock.prices[ri];
-  const prev=ri>0?stock.prices[ri-1]:stock.prices[0];
-  if(!roundStartedAt||!roundEndsAt) return target;
-  const now=Date.now();
-  const total=roundEndsAt-roundStartedAt;
-  const t=Math.min(Math.max((now-roundStartedAt)/total,0),1);
-  let base=prev+(target-prev)*t;
-  const noiseSeed=Math.floor(now/2000);
-  const noise=(Math.sin(noiseSeed*9301+(stock.id?.charCodeAt(0)||1)*49297)*0.5+0.5)*2-1;
-  const noiseRange=Math.abs(target-prev)*0.04+base*0.008;
-  let price=Math.round(base+noise*noiseRange);
-  if(activeEvent){
-    const eff=activeEvent.stockEffects?.[stock.id]??activeEvent.globalEffect??0;
-    price=Math.round(price*(1+eff/100));
-  }
-  return Math.max(price,1);
+function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets) {
+  if (!stock || round < 1) return stock?.prices?.[0] ?? 0;
+  const ri = Math.min(round - 1, stock.prices.length - 1);
+
+  // 수정된 목표가가 있으면 사용
+  const mod = modifiedTargets?.[stock.id];
+  const target = (mod && mod.round === round)
+    ? mod.modifiedPrice
+    : stock.prices[ri];
+
+  const prev = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+
+  if (!roundStartedAt || !roundEndsAt) return target;
+  const now = Date.now();
+  const total = roundEndsAt - roundStartedAt;
+  const t = Math.min(Math.max((now - roundStartedAt) / total, 0), 1);
+  let base = prev + (target - prev) * t;
+
+  const noiseSeed = Math.floor(now / 2000);
+  const noise = (Math.sin(noiseSeed * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.5 + 0.5) * 2 - 1;
+  const noiseRange = Math.abs(target - prev) * 0.04 + base * 0.008;
+  let price = Math.round(base + noise * noiseRange);
+
+  // activeEvent는 이미 modifiedTargets에 반영됐으므로 제거
+  return Math.max(price, 1);
+}
+
+// 자동 이벤트 타이머 + 가격 기록 훅
+function useAutoEventAndHistory(shared) {
+  useEffect(() => {
+    if (shared.phase !== "round") return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+
+      // 1. 가격 히스토리 기록 (10초마다)
+      if (!shared.roundStartedAt) return;
+      const elapsed = now - shared.roundStartedAt;
+      if (elapsed % 10000 < 1500) {
+        const newHistory = { ...(shared.priceHistory || {}) };
+        (shared.stocks || []).forEach(stock => {
+          const price = getCurrentPrice(
+            stock, shared.round,
+            shared.roundStartedAt, shared.roundEndsAt,
+            shared.activeEvent, shared.modifiedTargets
+          );
+          if (!newHistory[stock.id]) newHistory[stock.id] = [];
+          newHistory[stock.id] = [
+            ...newHistory[stock.id].slice(-60),
+            { t: now, price }
+          ];
+        });
+        setShared(s => ({ ...s, priceHistory: newHistory }));
+      }
+
+      // 2. 자동 이벤트 발동 체크
+      if (!shared.nextAutoEventAt || now < shared.nextAutoEventAt) return;
+
+      const autoEvents = (shared.eventPresets || []).filter(e => e.autoTrigger);
+      if (autoEvents.length === 0) return;
+
+      const triggered = autoEvents.filter(e => Math.random() * 100 < (e.probability || 50));
+      if (triggered.length === 0) {
+        const picked = autoEvents[Math.floor(Math.random() * autoEvents.length)];
+        const minMs = (picked.triggerIntervalMin || 1) * 60 * 1000;
+        const maxMs = (picked.triggerIntervalMax || 3) * 60 * 1000;
+        const nextMs = minMs + Math.random() * (maxMs - minMs);
+        setShared(s => ({ ...s, nextAutoEventAt: now + nextMs }));
+        return;
+      }
+
+      const ev = triggered[Math.floor(Math.random() * triggered.length)];
+
+      // 목표가 수정
+      const newModified = { ...(shared.modifiedTargets || {}) };
+      if (ev.affectTarget !== false) {
+        (shared.stocks || []).forEach(stock => {
+          const eff = ev.stockEffects?.[stock.id] ?? ev.globalEffect ?? 0;
+          if (eff === 0) return;
+          const ri = Math.min(shared.round - 1, stock.prices.length - 1);
+          const base = newModified[stock.id]?.round === shared.round
+            ? newModified[stock.id].modifiedPrice
+            : stock.prices[ri];
+          newModified[stock.id] = {
+            round: shared.round,
+            originalPrice: stock.prices[ri],
+            modifiedPrice: Math.max(Math.round(base * (1 + eff / 100)), 1),
+          };
+        });
+      }
+
+      const minMs = (ev.triggerIntervalMin || 1) * 60 * 1000;
+      const maxMs = (ev.triggerIntervalMax || 3) * 60 * 1000;
+      const nextMs = minMs + Math.random() * (maxMs - minMs);
+
+      setShared(s => ({
+        ...s,
+        activeEvent: { ...ev, appliedAt: now },
+        eventHistory: [...(s.eventHistory || []), { ...ev, appliedAt: now }],
+        modifiedTargets: newModified,
+        nextAutoEventAt: now + nextMs,
+      }));
+
+      if (ev.duration > 0) {
+        setTimeout(() => {
+          setShared(s => ({ ...s, activeEvent: null }));
+        }, ev.duration * 1000);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [shared.phase, shared.nextAutoEventAt, shared.roundStartedAt]);
 }
 
 /* ══════════════════════════════════════════
@@ -350,78 +447,138 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 );
 
 /* ── 캔들스틱 차트 ── */
-function LiveBigChart({stock,round,maxRound,roundStartedAt,roundEndsAt,activeEvent,blind}){
-  const [,tick]=useState(0);
-  useEffect(()=>{const id=setInterval(()=>tick(t=>t+1),500);return()=>clearInterval(id);},[]);
-  if(!stock) return null;
-  const ri=Math.min(round-1,stock.prices.length-1);
-  const curPrice=getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent);
-  const candles=[];
-  for(let i=0;i<ri;i++){
-    const open=i===0?stock.prices[0]:stock.prices[i-1];
-    const close=stock.prices[i];
-    candles.push({open,close,high:Math.max(open,close)*1.02,low:Math.min(open,close)*0.98,label:`R${i+1}`,live:false});
-  }
-  const curOpen=ri>0?stock.prices[ri-1]:stock.prices[0];
-  candles.push({open:curOpen,close:curPrice,high:Math.max(curOpen,curPrice)*1.015,low:Math.min(curOpen,curPrice)*0.985,label:`R${round}`,live:true});
-  const allP=candles.flatMap(c=>[c.high,c.low]);
-  const minP=Math.min(...allP)*0.97,maxP=Math.max(...allP)*1.03,range=maxP-minP||1;
-  const W=280,H=120,cw=Math.min(36,(W/candles.length)*0.55),gap=W/candles.length;
-  const toY=p=>H-((p-minP)/range)*H;
-  const grids=Array.from({length:4},(_,i)=>{const p=minP+(range/3)*i;return{y:toY(p),label:fmtN(Math.round(p))};});
-  if(blind) return(
-    <div style={{height:160,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:G.bg,borderRadius:12}}>
-      <div style={{fontSize:32,marginBottom:8}}>🙈</div>
-      <div style={{fontSize:14,fontWeight:700,color:G.gray1}}>블라인드 라운드</div>
-      <div style={{fontSize:12,color:G.gray2,marginTop:4}}>이번 라운드는 가격이 숨겨집니다</div>
+function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, priceHistory }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick(t => t + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!stock) return null;
+
+  if (blind) return (
+    <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: G.bg, borderRadius: 12 }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>🙈</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: G.gray1 }}>블라인드 라운드</div>
+      <div style={{ fontSize: 12, color: G.gray2, marginTop: 4 }}>이번 라운드는 가격이 숨겨집니다</div>
     </div>
   );
-  return(
-    <svg width="100%" viewBox={`-48 -20 ${W+60} ${H+40}`} style={{overflow:"visible",display:"block"}}>
-      {grids.map((g,i)=>(
+
+  const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
+
+  const candles = [];
+  for (let i = 0; i < Math.min(round - 1, stock.prices.length - 1); i++) {
+    const open = i === 0 ? stock.prices[0] : stock.prices[i - 1];
+    const close = stock.prices[i];
+    candles.push({ open, close, high: Math.max(open, close) * 1.02, low: Math.min(open, close) * 0.98, label: `R${i + 1}`, type: "candle" });
+  }
+
+  const history = (priceHistory?.[stock.id] || []).filter(p => roundStartedAt && p.t >= roundStartedAt);
+  const livePts = history.map(p => p.price);
+  if (livePts.length === 0 || livePts[livePts.length - 1] !== curPrice) livePts.push(curPrice);
+
+  const allPrices = [...candles.flatMap(c => [c.high, c.low]), ...livePts];
+  if (allPrices.length === 0) return null;
+
+  const minP = Math.min(...allPrices) * 0.96;
+  const maxP = Math.max(...allPrices) * 1.04;
+  const range = maxP - minP || 1;
+
+  const W = 280, H = 120;
+  const toY = p => H - ((p - minP) / range) * H;
+
+  const candleAreaW = candles.length > 0 ? W * 0.45 : 0;
+  const liveAreaW = W - candleAreaW;
+  const candleGap = candles.length > 0 ? candleAreaW / candles.length : 0;
+  const cw = Math.min(24, candleGap * 0.6);
+
+  const grids = Array.from({ length: 4 }, (_, i) => {
+    const p = minP + (range / 3) * i;
+    return { y: toY(p), label: fmtN(Math.round(p)) };
+  });
+
+  const liveStartX = candleAreaW;
+  const livePtCoords = livePts.map((p, i) => ({
+    x: liveStartX + (livePts.length === 1 ? liveAreaW / 2 : (i / (livePts.length - 1)) * liveAreaW),
+    y: toY(p),
+  }));
+  const liveD = livePtCoords.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+  const liveFill = liveD + ` L${livePtCoords[livePtCoords.length - 1].x},${H} L${liveStartX},${H} Z`;
+  const isUp = livePts[livePts.length - 1] >= livePts[0];
+  const lc = isUp ? G.red : G.blue;
+
+  const mod = modifiedTargets?.[stock.id];
+  const showModified = mod && mod.round === round;
+
+  return (
+    <svg width="100%" viewBox={`-48 -24 ${W + 60} ${H + 44}`} style={{ overflow: "visible", display: "block" }}>
+      {grids.map((g, i) => (
         <g key={i}>
-          <line x1={0} y1={g.y} x2={W} y2={g.y} stroke="#E5E8EB" strokeWidth="0.8" strokeDasharray="4,3"/>
-          <text x={-4} y={g.y+3} textAnchor="end" fontSize="8" fill="#B0B8C1" fontFamily="monospace">{g.label}</text>
+          <line x1={0} y1={g.y} x2={W} y2={g.y} stroke="#E5E8EB" strokeWidth="0.8" strokeDasharray="4,3" />
+          <text x={-4} y={g.y + 3} textAnchor="end" fontSize="8" fill="#B0B8C1" fontFamily="monospace">{g.label}</text>
         </g>
       ))}
-      {candles.map((c,i)=>{
-        const x=gap*i+gap/2,isUp=c.close>=c.open,color=isUp?G.red:G.blue;
-        const bodyTop=toY(Math.max(c.open,c.close)),bodyBot=toY(Math.min(c.open,c.close));
-        const bodyH=Math.max(bodyBot-bodyTop,2);
-        return(
+      {candles.map((c, i) => {
+        const x = candleGap * i + candleGap / 2;
+        const isUp2 = c.close >= c.open;
+        const color = isUp2 ? G.red : G.blue;
+        const bodyTop = toY(Math.max(c.open, c.close));
+        const bodyBot = toY(Math.min(c.open, c.close));
+        const bodyH = Math.max(bodyBot - bodyTop, 2);
+        return (
           <g key={i}>
-            <line x1={x} y1={toY(c.high)} x2={x} y2={bodyTop} stroke={color} strokeWidth={c.live?1.5:1}/>
-            <line x1={x} y1={bodyBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth={c.live?1.5:1}/>
-            <rect x={x-cw/2} y={bodyTop} width={cw} height={bodyH}
-              fill={isUp?color:"none"} stroke={color} strokeWidth={c.live?2:1.5} rx={2} opacity={c.live?1:0.85}/>
-            {c.live&&(
-              <>
-                <line x1={0} y1={toY(c.close)} x2={W} y2={toY(c.close)} stroke={color} strokeWidth="1" strokeDasharray="3,2" opacity=".6"/>
-                <rect x={W+2} y={toY(c.close)-8} width={48} height={16} fill={color} rx={3}/>
-                <text x={W+26} y={toY(c.close)+4} textAnchor="middle" fontSize="9" fill="white" fontFamily="monospace" fontWeight="700">{fmtN(c.close)}</text>
-              </>
-            )}
-            <text x={x} y={H+14} textAnchor="middle" fontSize="9.5" fill={c.live?color:G.gray1} fontFamily="inherit" fontWeight={c.live?"700":"400"}>{c.label}</text>
+            <line x1={x} y1={toY(c.high)} x2={x} y2={bodyTop} stroke={color} strokeWidth="1" />
+            <line x1={x} y1={bodyBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth="1" />
+            <rect x={x - cw / 2} y={bodyTop} width={cw} height={bodyH}
+              fill={isUp2 ? color : "none"} stroke={color} strokeWidth="1.5" rx={1} opacity={0.75} />
+            <text x={x} y={H + 14} textAnchor="middle" fontSize="9" fill={G.gray1} fontFamily="inherit">{c.label}</text>
           </g>
         );
       })}
-      {(()=>{
-        const last=candles[candles.length-1];
-        const x=gap*(candles.length-1)+gap/2,y=toY(last.close);
-        const color=last.close>=last.open?G.red:G.blue;
-        return <circle cx={x} cy={y} r="4" fill={color}><animate attributeName="opacity" values="1;0.2;1" dur="1.5s" repeatCount="indefinite"/></circle>;
+      {candles.length > 0 && (
+        <line x1={candleAreaW} y1={-10} x2={candleAreaW} y2={H + 4} stroke={G.border} strokeWidth="1" strokeDasharray="3,2" />
+      )}
+      {livePtCoords.length > 1 && (
+        <>
+          <path d={liveFill} fill={lc} opacity="0.1" />
+          <path d={liveD} fill="none" stroke={lc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+      {livePtCoords.length > 0 && (() => {
+        const last = livePtCoords[livePtCoords.length - 1];
+        return (
+          <>
+            <line x1={0} y1={last.y} x2={W} y2={last.y} stroke={lc} strokeWidth="0.8" strokeDasharray="3,2" opacity="0.5" />
+            <rect x={W + 2} y={last.y - 8} width={52} height={16} fill={lc} rx={3} />
+            <text x={W + 28} y={last.y + 4} textAnchor="middle" fontSize="9" fill="white" fontFamily="monospace" fontWeight="700">{fmtN(curPrice)}</text>
+            <circle cx={last.x} cy={last.y} r="4" fill={lc} stroke="white" strokeWidth="2">
+              <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" />
+            </circle>
+          </>
+        );
       })()}
+      <text x={liveStartX + liveAreaW / 2} y={H + 14} textAnchor="middle" fontSize="9.5"
+        fill={lc} fontFamily="inherit" fontWeight="700">R{round}</text>
+      {showModified && (
+        <>
+          <line x1={liveStartX} y1={toY(mod.modifiedPrice)} x2={W} y2={toY(mod.modifiedPrice)}
+            stroke={G.orange} strokeWidth="1" strokeDasharray="4,2" />
+          <text x={liveStartX + 4} y={toY(mod.modifiedPrice) - 4} fontSize="8" fill={G.orange} fontFamily="inherit" fontWeight="700">
+            목표 {fmtN(mod.modifiedPrice)}
+          </text>
+        </>
+      )}
     </svg>
   );
 }
 
-function LiveMiniChart({stock,round,roundStartedAt,roundEndsAt,activeEvent,blind}){
+function LiveMiniChart({stock,round,roundStartedAt,roundEndsAt,activeEvent,modifiedTargets,blind}){
   const [,tick]=useState(0);
   useEffect(()=>{const id=setInterval(()=>tick(t=>t+1),2000);return()=>clearInterval(id);},[]);
   if(blind) return <div style={{width:52,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🙈</div>;
   if(!stock||stock.prices.length<1) return <div style={{width:52,height:28}}/>;
   const ri=Math.min(round-1,stock.prices.length-1);
-  const cur=getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent);
+  const cur=getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent,modifiedTargets);
   const pts2=[...stock.prices.slice(0,ri),cur];
   if(pts2.length<2) return <div style={{width:52,height:28}}/>;
   const mn=Math.min(...pts2),mx=Math.max(...pts2),r=mx-mn||1,W=52,H=28;
@@ -461,6 +618,7 @@ function useRoundTimer(phase,roundEndsAt){
 ══════════════════════════════════════════ */
 function AdminApp(){
   const shared=useShared();
+  useAutoEventAndHistory(shared);
   const [tab,setTab]=useState("control");
   const [settingsTab,setSettingsTab]=useState("template");
   const [toast,setToast]=useState({msg:"",show:false});
@@ -568,7 +726,18 @@ function AdminApp(){
     setShared(s=>({...s,phase:"round",round:r,roundStartedAt:now,roundEndsAt:now+dur,
       stocks:stocks.map(x=>({...x,prices:[...x.prices]})),
       shopItems:shopItems.map(x=>({...x})),rounds:rounds.map(x=>({...x})),
-      eventPresets:eventPresets.map(x=>({...x})),maxRound,initCash,feeRate,leverageEnabled,leverageMax}));
+      eventPresets:eventPresets.map(x=>({...x})),maxRound,initCash,feeRate,leverageEnabled,leverageMax,
+      modifiedTargets:{},
+      priceHistory:{},
+      nextAutoEventAt:(()=>{
+        const autoEvents=eventPresets.filter(e=>e.autoTrigger);
+        if(autoEvents.length===0) return null;
+        const ev=autoEvents[0];
+        const minMs=(ev.triggerIntervalMin||1)*60*1000;
+        const maxMs=(ev.triggerIntervalMax||3)*60*1000;
+        return Date.now()+minMs+Math.random()*(maxMs-minMs);
+      })(),
+    }));
     t2(`Round ${r} 시작 (${rc?.durationMin||5}분)`);
   };
   const stopRound=()=>{
@@ -604,7 +773,7 @@ function AdminApp(){
       const st=s.stocks?.find(x=>x.id===sid);
       if(!st) return s;
       const r=Math.max(s.round,1);
-      const price=getCurrentPrice(st,r,s.roundStartedAt,s.roundEndsAt,s.activeEvent);
+      const price=getCurrentPrice(st,r,s.roundStartedAt,s.roundEndsAt,s.activeEvent,s.modifiedTargets);
       const teams={...s.teams};
       for(const [tid,tm] of Object.entries(teams)){
         const qty=tm.holdings?.[sid]?.qty||0;
@@ -1061,6 +1230,51 @@ function AdminApp(){
                           );
                         })}
                       </div>
+                      <div style={{borderTop:`1px solid ${G.border}`,paddingTop:10,marginTop:4}}>
+                        <div style={{fontSize:12,fontWeight:700,color:G.black,marginBottom:8}}>⚡ 자동 발동 설정</div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:600,color:G.black}}>자동 발동</div>
+                            <div style={{fontSize:11,color:G.gray1}}>라운드 중 자동으로 발동</div>
+                          </div>
+                          <div onClick={()=>updEvent(ev.id,"autoTrigger",!ev.autoTrigger)}
+                            style={{width:44,height:26,borderRadius:13,background:ev.autoTrigger?G.blue:G.gray3,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                            <div style={{width:22,height:22,borderRadius:"50%",background:G.white,position:"absolute",top:2,left:ev.autoTrigger?20:2,transition:"left .2s"}}/>
+                          </div>
+                        </div>
+                        {ev.autoTrigger&&<>
+                          <div style={{display:"flex",gap:8,marginBottom:8}}>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>발동 간격 최소 (분)</div>
+                              <NumInput value={ev.triggerIntervalMin||1} onChange={e=>updEvent(ev.id,"triggerIntervalMin",parseInt(e.target.value)||1)}/>
+                            </div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>발동 간격 최대 (분)</div>
+                              <NumInput value={ev.triggerIntervalMax||3} onChange={e=>updEvent(ev.id,"triggerIntervalMax",parseInt(e.target.value)||3)}/>
+                            </div>
+                          </div>
+                          <div style={{display:"flex",gap:8,marginBottom:8}}>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>발동 확률 (%)</div>
+                              <NumInput value={ev.probability||50} onChange={e=>updEvent(ev.id,"probability",parseInt(e.target.value)||50)}/>
+                            </div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>지속 시간 (초, 0=영구)</div>
+                              <NumInput value={ev.duration||60} onChange={e=>updEvent(ev.id,"duration",parseInt(e.target.value)||0)}/>
+                            </div>
+                          </div>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div>
+                              <div style={{fontSize:13,fontWeight:600,color:G.black}}>목표가 수정</div>
+                              <div style={{fontSize:11,color:G.gray1}}>이벤트 효과를 목표가에 반영</div>
+                            </div>
+                            <div onClick={()=>updEvent(ev.id,"affectTarget",ev.affectTarget===false?true:false)}
+                              style={{width:44,height:26,borderRadius:13,background:ev.affectTarget!==false?G.blue:G.gray3,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                              <div style={{width:22,height:22,borderRadius:"50%",background:G.white,position:"absolute",top:2,left:ev.affectTarget!==false?20:2,transition:"left .2s"}}/>
+                            </div>
+                          </div>
+                        </>}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1270,20 +1484,20 @@ function UserApp(){
 
   const getLivePrice=useCallback(st=>{
     if(isBlind) return null;
-    return getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent);
-  },[round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,isBlind]);
+    return getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets);
+  },[round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,isBlind]);
 
   const totalAsset=useCallback(()=>{
     let t=cash;
     for(const [sid,h] of Object.entries(holdings)){
       const s=shared.stocks?.find(x=>x.id===sid);
       if(s&&h.qty>0){
-        const p=getCurrentPrice(s,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent);
+        const p=getCurrentPrice(s,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets);
         t+=p*h.qty;
       }
     }
     return t;
-  },[cash,holdings,shared.stocks,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent]);
+  },[cash,holdings,shared.stocks,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets]);
 
   const doLogin=()=>{
     const name=loginName.trim(),pw=loginPw.trim();
@@ -1480,7 +1694,9 @@ function UserApp(){
             <div style={{fontSize:11,color:G.gray2,marginBottom:8,fontWeight:500}}>가격 추이</div>
             <LiveBigChart stock={st} round={round} maxRound={maxRound}
               roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt}
-              activeEvent={shared.activeEvent} blind={isBlind}/>
+              activeEvent={shared.activeEvent} blind={isBlind}
+              modifiedTargets={shared.modifiedTargets}
+              priceHistory={shared.priceHistory}/>
           </div>
           {holding>0&&(
             <div style={{background:G.white,padding:"13px 18px",marginBottom:8,display:"flex",justifyContent:"space-between"}}>
@@ -1602,7 +1818,7 @@ function UserApp(){
                   <div style={{fontSize:14,fontWeight:700,color:G.black,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.name}</div>
                   <div style={{fontSize:11,color:G.gray2}}>{st.code}</div>
                 </div>
-                <LiveMiniChart stock={st} round={round} roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt} activeEvent={shared.activeEvent} blind={isBlind}/>
+                <LiveMiniChart stock={st} round={round} roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt} activeEvent={shared.activeEvent} modifiedTargets={shared.modifiedTargets} blind={isBlind}/>
                 <div style={{textAlign:"right",flexShrink:0,minWidth:72}}>
                   {isBlind
                     ?<div style={{fontSize:14,fontWeight:700,color:G.purple}}>???</div>
@@ -1650,7 +1866,7 @@ function UserApp(){
             ?<div style={{background:G.white,textAlign:"center",color:G.gray2,padding:"36px 0",fontSize:14}}>보유 종목 없음</div>
             :(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).map(st=>{
               const h=holdings[st.id];
-              const cur=getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent);
+              const cur=getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets);
               const ev2=cur*h.qty,pnl=ev2-h.avgPrice*h.qty;
               return(
                 <div key={st.id} onClick={()=>{setDetail(st);setOrderSide("sell");setQty(1);setLeverage(1);setScreen("detail");}}
