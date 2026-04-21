@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { db } from "./firebase";
+import { ref, onValue, update } from "firebase/database";
 
 /* ══════════════════════════════════════════
    디자인 시스템
@@ -92,12 +94,26 @@ const INIT_SS = {
   eventHistory:[],
 };
 
-let SS={...INIT_SS};
-const _L=new Set();
-const setShared=fn=>{SS={...SS,...fn(SS)};_L.forEach(f=>f({...SS}));};
-const useShared=()=>{
-  const [s,set]=useState({...SS});
-  useEffect(()=>{const f=v=>set(v);_L.add(f);return()=>_L.delete(f);},[]);
+const GAME_REF = ref(db, "game");
+
+const setShared = (fn) => {
+  onValue(GAME_REF, snapshot => {
+    const current = snapshot.val() || INIT_SS;
+    const next = { ...current, ...fn(current) };
+    update(GAME_REF, next);
+  }, { onlyOnce: true });
+};
+
+const useShared = () => {
+  const [s, set] = useState(INIT_SS);
+  useEffect(() => {
+    const unsub = onValue(GAME_REF, snapshot => {
+      const val = snapshot.val();
+      if (val) set(val);
+      else set(INIT_SS);
+    });
+    return () => unsub();
+  }, []);
   return s;
 };
 
