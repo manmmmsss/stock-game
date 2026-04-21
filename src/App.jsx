@@ -92,6 +92,8 @@ const INIT_SS = {
   bonusPool:{},
   activeEvent:null,
   eventHistory:[],
+  notice: "",
+  noticeAt: null,
 };
 
 const GAME_REF = ref(db, "game");
@@ -153,22 +155,28 @@ const useShared = () => {
 /* ══════════════════════════════════════════
    실시간 주가 계산 (선형 보간 + 종목별 이벤트)
 ══════════════════════════════════════════ */
-function getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent){
-  if(!stock||round<1) return stock?.prices?.[0]??0;
-  const ri=Math.min(round-1,stock.prices.length-1);
-  const target=stock.prices[ri];
-  const prev=ri>0?stock.prices[ri-1]:stock.prices[0];
-  if(!roundStartedAt||!roundEndsAt) return target;
-  const now=Date.now();
-  const total=roundEndsAt-roundStartedAt;
-  const t=Math.min(Math.max((now-roundStartedAt)/total,0),1);
-  let price=Math.round(prev+(target-prev)*t);
-  if(activeEvent){
-    const stockEffect=activeEvent.stockEffects?.[stock.id];
-    const eff=stockEffect!==undefined?stockEffect:activeEvent.globalEffect??0;
-    price=Math.round(price*(1+eff/100));
+function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, seed) {
+  if(!stock || round < 1) return stock?.prices?.[0] ?? 0;
+  const ri = Math.min(round - 1, stock.prices.length - 1);
+  const target = stock.prices[ri];
+  const prev = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+  if(!roundStartedAt || !roundEndsAt) return target;
+  const now = Date.now();
+  const total = roundEndsAt - roundStartedAt;
+  const t = Math.min(Math.max((now - roundStartedAt) / total, 0), 1);
+  // 선형 보간 기본값
+  let base = prev + (target - prev) * t;
+  // 노이즈: 2초 단위로 바뀌는 ±1.5% 진동
+  const noiseSeed = Math.floor(now / 2000);
+  const noise = (Math.sin(noiseSeed * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.5 + 0.5) * 2 - 1;
+  const noiseRange = Math.abs(target - prev) * 0.04 + base * 0.008;
+  let price = Math.round(base + noise * noiseRange);
+  if(activeEvent) {
+    const stockEffect = activeEvent.stockEffects?.[stock.id];
+    const eff = stockEffect !== undefined ? stockEffect : activeEvent.globalEffect ?? 0;
+    price = Math.round(price * (1 + eff / 100));
   }
-  return Math.max(price,1);
+  return Math.max(price, 1);
 }
 
 /* ══════════════════════════════════════════
@@ -344,6 +352,7 @@ function AdminApp(){
   // 팀 계정 관리
   const [newTeamName,setNewTeamName]=useState("");
   const [newTeamPw,setNewTeamPw]=useState("");
+  const [noticeInput, setNoticeInput] = useState("");
 
   /* 종목 */
   const addStock=()=>setStocks(p=>[...p,{id:uid(),name:"새 종목",code:"000000",emoji:"🏦",prices:Array(maxRound).fill(100000),totalSupply:0}]);
@@ -503,7 +512,7 @@ function AdminApp(){
   const phaseLabel=shared.phase==="ready"?"대기중":shared.phase==="round"?`R${shared.round} 진행중`:shared.phase==="break"?`R${shared.round} 종료`:"게임종료";
   const phaseBg=shared.phase==="round"?G.greenLight:shared.phase==="break"?G.yellowLight:shared.phase==="ended"?G.redLight:G.gray4;
   const phaseColor=shared.phase==="round"?G.green:shared.phase==="break"?G.yellow:shared.phase==="ended"?G.red:G.gray1;
-  const TABS=[["control","진행"],["settings","설정"],["teams","팀 관리"],["accounts","계좌"],["rank","순위"]];
+  const TABS=[["control","진행"],["settings","설정"],["teams","팀 관리"],["accounts","계좌"],["rank","순위"],["monitor","모니터"]];
 
   return (
     <div style={{background:G.bg,minHeight:"100vh",minHeightFallback:"100dvh",maxWidth:"430px",width:"100%",margin:"0 auto",overflowX:"hidden",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
@@ -529,6 +538,29 @@ function AdminApp(){
 
         {/* ══ 진행 탭 ══ */}
         {tab==="control"&&<>
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>📢 전체 공지</div>
+            <div style={{display:"flex",gap:8,marginBottom:6}}>
+              <TextInput
+                value={noticeInput}
+                onChange={e=>setNoticeInput(e.target.value)}
+                placeholder="전체 팀에게 보낼 공지 메시지"
+                style={{flex:1}}/>
+              <Btn onClick={()=>{
+                setShared(s=>({...s,notice:noticeInput,noticeAt:Date.now()}));
+                t2("공지 전송됨");
+              }} color={G.blue} style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>전송</Btn>
+            </div>
+            <Btn onClick={()=>{setShared(s=>({...s,notice:"",noticeAt:null}));setNoticeInput("");t2("공지 삭제됨");}}
+              color={G.redLight} textColor={G.red} style={{width:"100%",padding:"8px",fontSize:12}}>
+              공지 삭제
+            </Btn>
+            {shared.notice && (
+              <div style={{marginTop:8,background:G.blueLight,borderRadius:8,padding:"8px 10px",fontSize:12,color:G.blue}}>
+                현재 공지: {shared.notice}
+              </div>
+            )}
+          </div>
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>현재 상태</div>
             {[["단계",phaseLabel],["라운드",`${shared.round||0}/${shared.maxRound||3}`],
@@ -918,6 +950,32 @@ function AdminApp(){
                     <div style={{fontSize:11,color:G.gray1,marginBottom:3}}>구매 정보</div>
                     {(tm.purchases||[]).map(pid=>{const it=shared.shopItems?.find(x=>x.id===pid);return it?<div key={pid} style={{fontSize:12,color:G.gray1,padding:"2px 0"}}>{it.emoji} {it.name}</div>:null;})}
                   </div>}
+                  {(tm.history||[]).length>0&&(
+                    <div style={{marginTop:10}}>
+                      <div style={{fontSize:11,color:G.gray1,marginBottom:6,fontWeight:600}}>거래 내역</div>
+                      <div style={{maxHeight:160,overflowY:"auto"}}>
+                        {[...(tm.history||[])].reverse().map((h,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",
+                            alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${G.border}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:11,fontWeight:700,
+                                color:h.type==="buy"?G.red:G.blue,
+                                background:h.type==="buy"?G.redLight:G.blueLight,
+                                padding:"1px 6px",borderRadius:4}}>
+                                {h.type==="buy"?"매수":"매도"}
+                              </span>
+                              <span style={{fontSize:12,color:G.black}}>{h.stockEmoji} {h.stockName}</span>
+                              <span style={{fontSize:11,color:G.gray2}}>{h.qty}주</span>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:12,fontWeight:600,color:G.black}}>{fmt(h.total)}</div>
+                              <div style={{fontSize:10,color:G.gray2}}>{h.time}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div style={{marginTop:10,background:G.yellowLight,borderRadius:10,padding:"10px 12px"}}>
                     <div style={{fontSize:11,fontWeight:700,color:G.yellow,marginBottom:7}}>💰 보너스 지급</div>
                     <div style={{display:"flex",gap:6,marginBottom:6}}>
@@ -964,6 +1022,71 @@ function AdminApp(){
                 </div>
               ))
             }
+          </div>
+        )}
+
+        {/* ══ 모니터 탭 ══ */}
+        {tab==="monitor"&&(
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10,padding:"0 2px"}}>
+              실시간 팀 모니터링
+            </div>
+            {Object.entries(shared.teams||{}).map(([id,tm])=>{
+              const r=Math.max(shared.round,1);
+              const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
+                const st=shared.stocks?.find(x=>x.id===sid);
+                return acc+(st?getCurrentPrice(st,r,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent)*h.qty:0);
+              },0);
+              const total=tm.cash+sv;
+              const diff=total-(shared.initCash||DEFAULT_INIT_CASH);
+              return(
+                <div key={id} style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:800,color:G.black}}>{tm.name}</div>
+                      <div style={{fontSize:12,color:diff>=0?G.red:G.blue,fontWeight:600}}>
+                        {diff>=0?"+":""}{fmt(diff)} ({diff>=0?"+":""}{((diff/(shared.initCash||DEFAULT_INIT_CASH))*100).toFixed(2)}%)
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:16,fontWeight:800,color:G.black}}>{fmt(total)}</div>
+                      <div style={{fontSize:11,color:G.gray1}}>총 자산</div>
+                    </div>
+                  </div>
+                  {/* 현금/주식 비율 바 */}
+                  <div style={{marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <span style={{fontSize:11,color:G.blue}}>현금 {fmt(tm.cash)}</span>
+                      <span style={{fontSize:11,color:G.red}}>주식 {fmt(sv)}</span>
+                    </div>
+                    <div style={{height:5,borderRadius:3,background:G.border,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${total>0?(tm.cash/total*100).toFixed(1):100}%`,
+                        background:`linear-gradient(90deg,${G.blue},${G.purple})`,borderRadius:3}}/>
+                    </div>
+                  </div>
+                  {/* 보유 종목 */}
+                  {Object.entries(tm.holdings||{}).filter(([,h])=>h.qty>0).map(([sid,h])=>{
+                    const st=shared.stocks?.find(x=>x.id===sid);
+                    if(!st) return null;
+                    const cur=getCurrentPrice(st,r,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent);
+                    const pnl=(cur-h.avgPrice)*h.qty;
+                    return(
+                      <div key={sid} style={{display:"flex",justifyContent:"space-between",
+                        padding:"5px 0",borderBottom:`1px solid ${G.border}`}}>
+                        <span style={{fontSize:12,color:G.black}}>{st.emoji} {st.name} <span style={{color:G.gray2}}>{h.qty}주</span></span>
+                        <span style={{fontSize:12,fontWeight:600,color:pnl>=0?G.red:G.blue}}>{pnl>=0?"+":""}{fmt(pnl)}</span>
+                      </div>
+                    );
+                  })}
+                  {/* 최근 거래 */}
+                  {(tm.history||[]).length>0&&(
+                    <div style={{marginTop:8,fontSize:11,color:G.gray1}}>
+                      최근: {tm.history[tm.history.length-1].time} {tm.history[tm.history.length-1].stockEmoji} {tm.history[tm.history.length-1].stockName} {tm.history[tm.history.length-1].type==="buy"?"매수":"매도"} {tm.history[tm.history.length-1].qty}주
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1070,6 +1193,25 @@ function UserApp(){
         const na = Math.round((h.avgPrice * h.qty + cur * qty) / nq);
         return { ...t, cash: t.cash - cost, holdings: { ...t.holdings, [s.id]: { qty: nq, avgPrice: na } } };
       });
+      const buyRecord = {
+        time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+        type: 'buy',
+        stockName: s.name,
+        stockEmoji: s.emoji,
+        qty,
+        price: cur,
+        total: cost,
+      };
+      await setShared(st => ({
+        ...st,
+        teams: {
+          ...st.teams,
+          [teamId]: {
+            ...st.teams[teamId],
+            history: [...(st.teams[teamId]?.history || []), buyRecord]
+          }
+        }
+      }));
       t2(`${s.name} ${qty}주 매수 완료`);
     } else {
       const h = holdings[s.id];
@@ -1078,6 +1220,25 @@ function UserApp(){
         const newQty = (t.holdings?.[s.id]?.qty || 0) - qty;
         return { ...t, cash: t.cash + cost, holdings: { ...t.holdings, [s.id]: { ...t.holdings?.[s.id], qty: newQty } } };
       });
+      const sellRecord = {
+        time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+        type: 'sell',
+        stockName: s.name,
+        stockEmoji: s.emoji,
+        qty,
+        price: cur,
+        total: cost,
+      };
+      await setShared(st => ({
+        ...st,
+        teams: {
+          ...st.teams,
+          [teamId]: {
+            ...st.teams[teamId],
+            history: [...(st.teams[teamId]?.history || []), sellRecord]
+          }
+        }
+      }));
       t2(`${s.name} ${qty}주 매도 완료`);
     }
     setQty(1);
@@ -1238,6 +1399,16 @@ function UserApp(){
       <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)} side={orderSide} stock={st} qty={qty} price={cur}/>
       <div style={{background:G.white,padding:"14px 18px 16px",position:"sticky",top:0,zIndex:50,borderBottom:`1px solid ${G.border}`}}>
         {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent} stocks={shared.stocks}/></div>}
+        {shared.notice && (
+          <div style={{background:G.blue,color:G.white,padding:"8px 14px",
+            display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <span style={{fontSize:16,flexShrink:0}}>📢</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:700,marginBottom:1}}>운영자 공지</div>
+              <div style={{fontSize:13,lineHeight:1.4}}>{shared.notice}</div>
+            </div>
+          </div>
+        )}
         <div onClick={()=>setScreen("main")} style={{fontSize:13,color:G.gray1,marginBottom:8,cursor:"pointer"}}>← 뒤로</div>
         <div style={{fontSize:13,color:G.gray1,marginBottom:2}}>{st.emoji} {st.code}</div>
         <div style={{fontSize:20,fontWeight:800,color:G.black,marginBottom:4}}>{st.name}</div>
@@ -1306,6 +1477,16 @@ function UserApp(){
     <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)} side={orderSide} stock={detail} qty={qty} price={orderPrice}/>
     <div style={{background:G.white,padding:"16px 18px 0",position:"sticky",top:0,zIndex:50,borderBottom:`1px solid ${G.border}`}}>
       {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent} stocks={shared.stocks}/></div>}
+      {shared.notice && (
+        <div style={{background:G.blue,color:G.white,padding:"8px 14px",
+          display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{fontSize:16,flexShrink:0}}>📢</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,marginBottom:1}}>운영자 공지</div>
+            <div style={{fontSize:13,lineHeight:1.4}}>{shared.notice}</div>
+          </div>
+        </div>
+      )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
         <div>
           <div style={{fontSize:12,color:G.gray1,marginBottom:1}}>{teamName}팀</div>
@@ -1355,10 +1536,33 @@ function UserApp(){
       </>}
 
       {tab==="portfolio"&&<>
-        <div style={{background:G.white,padding:"13px 18px",borderBottom:`1px solid ${G.border}`,display:"flex",justifyContent:"space-between"}}>
-          <span style={{fontSize:14,color:G.gray1}}>보유 현금</span>
-          <span style={{fontSize:14,fontWeight:700,color:G.black}}>{fmt(cash)}</span>
-        </div>
+        <>
+          {/* 자산 요약 카드 */}
+          <div style={{background:G.white,padding:"16px 18px",borderBottom:`1px solid ${G.border}`}}>
+            <div style={{fontSize:12,color:G.gray1,marginBottom:10,fontWeight:500}}>자산 구성</div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <div style={{flex:1,background:G.blueLight,borderRadius:12,padding:"12px 14px"}}>
+                <div style={{fontSize:11,color:G.blue,fontWeight:600,marginBottom:4}}>💵 보유 현금</div>
+                <div style={{fontSize:16,fontWeight:800,color:G.black}}>{fmt(cash)}</div>
+                <div style={{fontSize:11,color:G.gray1,marginTop:2}}>{((cash/total)*100).toFixed(1)}%</div>
+              </div>
+              <div style={{flex:1,background:G.redLight,borderRadius:12,padding:"12px 14px"}}>
+                <div style={{fontSize:11,color:G.red,fontWeight:600,marginBottom:4}}>📈 주식 평가액</div>
+                <div style={{fontSize:16,fontWeight:800,color:G.black}}>{fmt(total-cash)}</div>
+                <div style={{fontSize:11,color:G.gray1,marginTop:2}}>{(((total-cash)/total)*100).toFixed(1)}%</div>
+              </div>
+            </div>
+            {/* 비율 바 */}
+            <div style={{height:6,borderRadius:3,background:G.border,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${(cash/total*100).toFixed(1)}%`,
+                background:`linear-gradient(90deg,${G.blue},${G.purple})`,borderRadius:3,transition:"width 0.5s"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+              <span style={{fontSize:10,color:G.blue}}>현금 {((cash/total)*100).toFixed(1)}%</span>
+              <span style={{fontSize:10,color:G.red}}>주식 {(((total-cash)/total)*100).toFixed(1)}%</span>
+            </div>
+          </div>
+        </>
         <div style={{padding:"10px 18px 5px",fontSize:12,color:G.gray1,fontWeight:500}}>보유 종목</div>
         {(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).length===0
           ?<div style={{background:G.white,textAlign:"center",color:G.gray2,padding:"36px 0",fontSize:14}}>보유 종목 없음</div>
