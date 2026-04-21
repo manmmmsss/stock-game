@@ -1,52 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { db } from "./firebase";
-import { ref, onValue, set as fbSet, get } from "firebase/database";
-
-const GAME_REF = ref(db, "game");
-
-function removeUndefined(obj) {
-  if (obj === null || obj === undefined) return null;
-  if (typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(removeUndefined);
-  const result = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) result[k] = removeUndefined(v);
-  }
-  return result;
-}
-
-const setShared = async (fn) => {
-  try {
-    const snapshot = await get(GAME_REF);
-    const current = snapshot.val() || { ...INIT_SS };
-    const next = fn(current);
-    const merged = { ...current, ...next };
-    await fbSet(GAME_REF, removeUndefined(merged));
-  } catch(e) {
-    console.error("Firebase setShared error:", e);
-  }
-};
-
-const useShared = () => {
-  const [s, set] = useState({ ...INIT_SS });
-  useEffect(() => {
-    const unsub = onValue(GAME_REF, snapshot => {
-      const val = snapshot.val();
-      if (val) {
-        if (val.stocks && !Array.isArray(val.stocks)) val.stocks = Object.values(val.stocks);
-        if (val.shopItems && !Array.isArray(val.shopItems)) val.shopItems = Object.values(val.shopItems);
-        if (val.rounds && !Array.isArray(val.rounds)) val.rounds = Object.values(val.rounds);
-        if (val.eventPresets && !Array.isArray(val.eventPresets)) val.eventPresets = Object.values(val.eventPresets);
-        if (val.customTemplates && !Array.isArray(val.customTemplates)) val.customTemplates = Object.values(val.customTemplates);
-        set(val);
-      } else {
-        set({ ...INIT_SS });
-      }
-    });
-    return () => unsub();
-  }, []);
-  return s;
-};
 
 /* ══════════════════════════════════════════
    디자인 시스템
@@ -189,7 +141,23 @@ const INIT_SS={
   noticeAt:null,
 };
 
+let SS={...INIT_SS};
+const _L=new Set();
+const setShared=fn=>{SS={...SS,...fn(SS)};_L.forEach(f=>f({...SS}));};
+const useShared=()=>{
+  const [s,set]=useState({...SS});
+  useEffect(()=>{const f=v=>set(v);_L.add(f);return()=>_L.delete(f);},[]);
+  return s;
+};
 
+/* ── Firebase 교체 포인트 ──
+import { db } from "./firebase";
+import { ref, onValue, set as fbSet, get } from "firebase/database";
+const GAME_REF = ref(db, "game");
+function removeUndefined(obj){...}
+const setShared = async (fn) => { ... };
+const useShared = () => { ... };
+── */
 
 /* ══════════════════════════════════════════
    실시간 주가 계산 (선형보간 + 노이즈)
