@@ -126,10 +126,10 @@ const BUILT_IN_TEMPLATES = [
       {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,445000,398000],totalSupply:0,listed:true},
     ],
     shopItems:[
-      {id:"sh1",name:"내부자 제보 A",desc:"다음 라운드에서 가장 많이 오를 종목을 귀띔해드립니다",price:800000,emoji:"🕵️",hint:"💡 힌트: 3라운드에서 현대자동차가 강세를 보일 것으로 예상됩니다. 글로벌 전기차 수요 증가 때문입니다."},
-      {id:"sh2",name:"시장 분석 리포트",desc:"현재 시장 흐름과 섹터별 동향을 분석해드립니다",price:500000,emoji:"📊",hint:"📊 분석: 현재 IT 섹터(카카오, 네이버)는 조정 국면. 반도체(삼성전자)는 저점 매수 기회. 에너지(LG에너지솔루션)는 강세 지속 예상."},
-      {id:"sh3",name:"VIP 정보 패키지",desc:"3라운드 전 종목 방향 + 추천 포트폴리오 제공",price:2000000,emoji:"💡",hint:"🔮 VIP 정보\n삼성전자: ▼ 하락 예상\n카카오: ▲ 반등 예상\n네이버: ▼ 조정 지속\n현대자동차: ▲ 강세\nLG에너지솔루션: ▲ 강세\n\n추천: 카카오 + 현대차 + LG에너지 집중 매수"},
-      {id:"sh4",name:"배당 수익률 리포트",desc:"라운드별 배당금이 가장 높은 종목 공개",price:300000,emoji:"💰",hint:"배당 TOP: 2라운드 네이버(주당 500원), 3라운드 삼성전자(주당 800원). 장기보유 전략 추천!"},
+      {id:"sh1",name:"내부자 제보 A",desc:"다음 라운드에서 가장 많이 오를 종목을 귀띔해드립니다",price:2400000,emoji:"🕵️",hint:"💡 힌트: 3라운드에서 현대자동차가 강세를 보일 것으로 예상됩니다. 글로벌 전기차 수요 증가 때문입니다."},
+      {id:"sh2",name:"시장 분석 리포트",desc:"현재 시장 흐름과 섹터별 동향을 분석해드립니다",price:1500000,emoji:"📊",hint:"📊 분석: 현재 IT 섹터(카카오, 네이버)는 조정 국면. 반도체(삼성전자)는 저점 매수 기회. 에너지(LG에너지솔루션)는 강세 지속 예상."},
+      {id:"sh3",name:"VIP 정보 패키지",desc:"3라운드 전 종목 방향 + 추천 포트폴리오 제공",price:6000000,emoji:"💡",hint:"🔮 VIP 정보\n삼성전자: ▼ 하락 예상\n카카오: ▲ 반등 예상\n네이버: ▼ 조정 지속\n현대자동차: ▲ 강세\nLG에너지솔루션: ▲ 강세\n\n추천: 카카오 + 현대차 + LG에너지 집중 매수"},
+      {id:"sh4",name:"배당 수익률 리포트",desc:"라운드별 배당금이 가장 높은 종목 공개",price:900000,emoji:"💰",hint:"배당 TOP: 2라운드 네이버(주당 500원), 3라운드 삼성전자(주당 800원). 장기보유 전략 추천!"},
     ],
     eventPresets:[
       {id:"e1",name:"반도체 수출 호조",emoji:"💾",desc:"글로벌 반도체 수요 급증",globalEffect:5,stockEffects:{s1:20,s5:15,s2:-5,s3:-3,s4:3},note:"삼성 급등",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:40,duration:90,affectTarget:true},
@@ -157,10 +157,10 @@ const BUILT_IN_TEMPLATES = [
       {id:"s5",name:"그린에너지",code:"GRN",emoji:"🌱",prices:[45000,52000,38000,68000],totalSupply:0,listed:true},
     ],
     shopItems:[
-      {id:"sh1",name:"레버리지 가이드",desc:"레버리지 투자 최적 타이밍 분석 제공",price:600000,emoji:"⚡",hint:"⚡ 레버리지 전략\n3라운드(블라인드)에서 테슬라코리아가 급락합니다.\n2라운드에 테슬라 매도 후 4라운드에 x2 레버리지 매수 추천!\n바이오제약은 2라운드 고점에서 반드시 매도하세요."},
-      {id:"sh2",name:"3라운드 블라인드 해제",desc:"블라인드 라운드의 예상 가격대를 알려드립니다",price:1500000,emoji:"🙈",hint:"🔓 블라인드 해제\n3라운드 예상가:\n테슬라코리아: 180,000 (급락)\n바이오제약: 8,000 (급락)\n코인뱅크: 45,000 (하락)\n메타버스: 48,000 (상승!)\n그린에너지: 38,000 (하락)"},
-      {id:"sh3",name:"내부자 폐지 정보",desc:"이번 게임에서 폐지될 종목 사전 정보",price:2500000,emoji:"☠️",hint:"☠️ 극비 정보\n코인뱅크는 3라운드 중 규제 이슈로 폐지 예정!\n지금 당장 전량 매도하세요. 폐지 시 현재가로 강제 매도됩니다."},
-      {id:"sh4",name:"급등주 포착",desc:"4라운드에서 가장 크게 오를 종목 1개 공개",price:1000000,emoji:"🚀",hint:"🚀 4라운드 급등주: 바이오제약!\n3라운드 저점(8,000)에서 최대한 매수 후 4라운드 고점(35,000)에서 매도. 수익률 337% 예상"},
+      {id:"sh1",name:"레버리지 가이드",desc:"레버리지 투자 최적 타이밍 분석 제공",price:1800000,emoji:"⚡",hint:"⚡ 레버리지 전략\n3라운드(블라인드)에서 테슬라코리아가 급락합니다.\n2라운드에 테슬라 매도 후 4라운드에 x2 레버리지 매수 추천!\n바이오제약은 2라운드 고점에서 반드시 매도하세요."},
+      {id:"sh2",name:"3라운드 블라인드 해제",desc:"블라인드 라운드의 예상 가격대를 알려드립니다",price:4500000,emoji:"🙈",hint:"🔓 블라인드 해제\n3라운드 예상가:\n테슬라코리아: 180,000 (급락)\n바이오제약: 8,000 (급락)\n코인뱅크: 45,000 (하락)\n메타버스: 48,000 (상승!)\n그린에너지: 38,000 (하락)"},
+      {id:"sh3",name:"내부자 폐지 정보",desc:"이번 게임에서 폐지될 종목 사전 정보",price:7500000,emoji:"☠️",hint:"☠️ 극비 정보\n코인뱅크는 3라운드 중 규제 이슈로 폐지 예정!\n지금 당장 전량 매도하세요. 폐지 시 현재가로 강제 매도됩니다."},
+      {id:"sh4",name:"급등주 포착",desc:"4라운드에서 가장 크게 오를 종목 1개 공개",price:3000000,emoji:"🚀",hint:"🚀 4라운드 급등주: 바이오제약!\n3라운드 저점(8,000)에서 최대한 매수 후 4라운드 고점(35,000)에서 매도. 수익률 337% 예상"},
     ],
     eventPresets:[
       {id:"e1",name:"FDA 신약 승인",emoji:"💊",desc:"바이오제약 신약 FDA 승인 소식",globalEffect:0,stockEffects:{s2:40,s1:5,s3:10,s4:8,s5:3},note:"바이오 급등",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:50,duration:120,affectTarget:true},
@@ -188,10 +188,10 @@ const BUILT_IN_TEMPLATES = [
       {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,380000,490000],totalSupply:0,listed:true},
     ],
     shopItems:[
-      {id:"sh1",name:"블라인드 힌트 A",desc:"2라운드 특정 종목의 방향만 알려드립니다 (상승/하락)",price:400000,emoji:"🔍",hint:"2라운드 상승 종목: 카카오, 현대자동차\n2라운드 하락 종목: 삼성전자, 네이버, LG에너지솔루션"},
-      {id:"sh2",name:"블라인드 완전 해제",desc:"2라운드 전 종목 예상 가격 공개",price:1200000,emoji:"🔓",hint:"🔓 2라운드 완전 해제\n삼성전자: 48,000 (▼ -26%)\n카카오: 62,000 (▲ +38%)\n네이버: 155,000 (▼ -14%)\n현대자동차: 118,000 (▲ +24%)\nLG에너지솔루션: 380,000 (▼ -10%)"},
-      {id:"sh3",name:"3라운드 내부 정보",desc:"3라운드에서 가장 크게 움직일 종목 공개",price:1000000,emoji:"🕵️",hint:"3라운드 주목 종목:\n▲ 네이버: 155,000→210,000 (+35%)\n▲ LG에너지솔루션: 380,000→490,000 (+29%)\n▼ 현대자동차: 118,000→75,000 (-36%) ⚠️ 고점 매도 필수!"},
-      {id:"sh4",name:"배당 알림",desc:"3라운드 배당금 지급 종목과 금액 공개",price:200000,emoji:"💰",hint:"3라운드 배당 지급:\n카카오: 주당 800원\n현대자동차: 주당 1,200원\n→ 현대차 3라운드 전에 매수해두면 배당+시세차익 가능!"},
+      {id:"sh1",name:"블라인드 힌트 A",desc:"2라운드 특정 종목의 방향만 알려드립니다 (상승/하락)",price:1200000,emoji:"🔍",hint:"2라운드 상승 종목: 카카오, 현대자동차\n2라운드 하락 종목: 삼성전자, 네이버, LG에너지솔루션"},
+      {id:"sh2",name:"블라인드 완전 해제",desc:"2라운드 전 종목 예상 가격 공개",price:3600000,emoji:"🔓",hint:"🔓 2라운드 완전 해제\n삼성전자: 48,000 (▼ -26%)\n카카오: 62,000 (▲ +38%)\n네이버: 155,000 (▼ -14%)\n현대자동차: 118,000 (▲ +24%)\nLG에너지솔루션: 380,000 (▼ -10%)"},
+      {id:"sh3",name:"3라운드 내부 정보",desc:"3라운드에서 가장 크게 움직일 종목 공개",price:3000000,emoji:"🕵️",hint:"3라운드 주목 종목:\n▲ 네이버: 155,000→210,000 (+35%)\n▲ LG에너지솔루션: 380,000→490,000 (+29%)\n▼ 현대자동차: 118,000→75,000 (-36%) ⚠️ 고점 매도 필수!"},
+      {id:"sh4",name:"배당 알림",desc:"3라운드 배당금 지급 종목과 금액 공개",price:600000,emoji:"💰",hint:"3라운드 배당 지급:\n카카오: 주당 800원\n현대자동차: 주당 1,200원\n→ 현대차 3라운드 전에 매수해두면 배당+시세차익 가능!"},
     ],
     eventPresets:[
       {id:"e1",name:"IT 섹터 쇼크",emoji:"💻",desc:"글로벌 빅테크 동반 급락",globalEffect:-8,stockEffects:{s2:-20,s3:-18,s1:-10,s4:5,s5:3},note:"IT 하락",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:45,duration:120,affectTarget:true},
@@ -218,10 +218,10 @@ const BUILT_IN_TEMPLATES = [
       {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,432000,448000],totalSupply:0,listed:true},
     ],
     shopItems:[
-      {id:"sh1",name:"배당 수익률 계산기",desc:"전 종목 라운드별 배당 수익률 분석 자료",price:300000,emoji:"📊",hint:"💰 배당 총액 시뮬레이션 (100주 보유 기준)\n삼성전자: R1(5만)+R3(15만) = 20만원\n카카오: R2(12만)+R3(8만) = 20만원\n네이버: R1(8만)+R3(20만) = 28만원 ← 최고!\nLG에너지솔루션: R2(10만)+R3(25만) = 35만원 ← 주가 비쌈 주의"},
-      {id:"sh2",name:"배당 귀족 포트폴리오",desc:"배당+시세차익 동시 극대화 추천 포트폴리오",price:800000,emoji:"👑",hint:"👑 최적 포트폴리오\n네이버 30% + LG에너지솔루션 30% + 삼성전자 40%\n이유: 네이버·LG는 배당 높음, 삼성은 안정적 상승"},
-      {id:"sh3",name:"3라운드 배당 극비 정보",desc:"3라운드 배당금이 가장 높은 종목 Top3",price:600000,emoji:"🏆",hint:"3라운드 배당 Top3\n🥇 LG에너지솔루션: 주당 2,500원\n🥈 네이버: 주당 2,000원\n🥉 삼성전자: 주당 1,500원\n→ 3라운드 전 LG에너지 최대한 확보!"},
-      {id:"sh4",name:"이벤트 방어 전략",desc:"배당 중 이벤트 발생 시 손실 최소화 방법",price:400000,emoji:"🛡️",hint:"🛡️ 방어 전략\n이벤트 발생 시 배당주는 상대적으로 덜 떨어집니다.\n급락 이벤트 시 오히려 저점 매수 기회!\n삼성전자·네이버는 이벤트 충격이 작은 방어주입니다."},
+      {id:"sh1",name:"배당 수익률 계산기",desc:"전 종목 라운드별 배당 수익률 분석 자료",price:900000,emoji:"📊",hint:"💰 배당 총액 시뮬레이션 (100주 보유 기준)\n삼성전자: R1(5만)+R3(15만) = 20만원\n카카오: R2(12만)+R3(8만) = 20만원\n네이버: R1(8만)+R3(20만) = 28만원 ← 최고!\nLG에너지솔루션: R2(10만)+R3(25만) = 35만원 ← 주가 비쌈 주의"},
+      {id:"sh2",name:"배당 귀족 포트폴리오",desc:"배당+시세차익 동시 극대화 추천 포트폴리오",price:2400000,emoji:"👑",hint:"👑 최적 포트폴리오\n네이버 30% + LG에너지솔루션 30% + 삼성전자 40%\n이유: 네이버·LG는 배당 높음, 삼성은 안정적 상승"},
+      {id:"sh3",name:"3라운드 배당 극비 정보",desc:"3라운드 배당금이 가장 높은 종목 Top3",price:1800000,emoji:"🏆",hint:"3라운드 배당 Top3\n🥇 LG에너지솔루션: 주당 2,500원\n🥈 네이버: 주당 2,000원\n🥉 삼성전자: 주당 1,500원\n→ 3라운드 전 LG에너지 최대한 확보!"},
+      {id:"sh4",name:"이벤트 방어 전략",desc:"배당 중 이벤트 발생 시 손실 최소화 방법",price:1200000,emoji:"🛡️",hint:"🛡️ 방어 전략\n이벤트 발생 시 배당주는 상대적으로 덜 떨어집니다.\n급락 이벤트 시 오히려 저점 매수 기회!\n삼성전자·네이버는 이벤트 충격이 작은 방어주입니다."},
     ],
     eventPresets:[
       {id:"e1",name:"배당 시즌 호황",emoji:"💰",desc:"기관투자자 배당주 대규모 매입",globalEffect:6,stockEffects:{s1:12,s3:10,s5:8,s2:5,s4:6},note:"배당주 강세",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:4,probability:40,duration:120,affectTarget:true},
@@ -250,10 +250,10 @@ const BUILT_IN_TEMPLATES = [
       {id:"s5",name:"E종목",code:"E001",emoji:"⚫",prices:[10000,10800,11800,10200,17000],totalSupply:0,listed:true},
     ],
     shopItems:[
-      {id:"sh1",name:"급등 예고 알림",desc:"다음 라운드 급등 종목 1개만 공개",price:500000,emoji:"🚀",hint:"🚀 급등 예고\n5라운드에서 B종목과 E종목이 동시 급등!\nB종목 7,000→16,000 (+128%), E종목 10,200→17,000 (+67%)\n4라운드에 저점 매수 필수!"},
-      {id:"sh2",name:"블라인드 완전 공개",desc:"3라운드 블라인드 전 종목 가격 공개",price:800000,emoji:"🔓",hint:"🔓 3라운드 실제 가격\nA종목: 9,000 (▼)\nB종목: 13,000 (▲)\nC종목: 10,500 (→)\nD종목: 8,000 (▼▼)\nE종목: 11,800 (▲)\n→ D종목 절대 보유금지!"},
-      {id:"sh3",name:"수수료 절약 전략",desc:"0.3% 수수료 최소화 투자 전략 가이드",price:200000,emoji:"💡",hint:"💡 수수료 절약 전략\n매 라운드 매매하면 수수료로 자산 3% 소모!\n핵심 종목만 골라 2~3번만 매매하세요.\n추천: 1라운드 매수 → 4~5라운드 매도 장기 보유"},
-      {id:"sh4",name:"레버리지 타이밍",desc:"레버리지 x2 투자 최적 타이밍 공개",price:600000,emoji:"⚡",hint:"⚡ 레버리지 최적 타이밍\n4라운드에 B종목 x2 레버리지 매수!\n7,000→16,000 상승 시 레버리지 수익률 228%\n단, 수수료 0.3%×2=0.6% 적용됨 주의"},
+      {id:"sh1",name:"급등 예고 알림",desc:"다음 라운드 급등 종목 1개만 공개",price:1500000,emoji:"🚀",hint:"🚀 급등 예고\n5라운드에서 B종목과 E종목이 동시 급등!\nB종목 7,000→16,000 (+128%), E종목 10,200→17,000 (+67%)\n4라운드에 저점 매수 필수!"},
+      {id:"sh2",name:"블라인드 완전 공개",desc:"3라운드 블라인드 전 종목 가격 공개",price:2400000,emoji:"🔓",hint:"🔓 3라운드 실제 가격\nA종목: 9,000 (▼)\nB종목: 13,000 (▲)\nC종목: 10,500 (→)\nD종목: 8,000 (▼▼)\nE종목: 11,800 (▲)\n→ D종목 절대 보유금지!"},
+      {id:"sh3",name:"수수료 절약 전략",desc:"0.3% 수수료 최소화 투자 전략 가이드",price:600000,emoji:"💡",hint:"💡 수수료 절약 전략\n매 라운드 매매하면 수수료로 자산 3% 소모!\n핵심 종목만 골라 2~3번만 매매하세요.\n추천: 1라운드 매수 → 4~5라운드 매도 장기 보유"},
+      {id:"sh4",name:"레버리지 타이밍",desc:"레버리지 x2 투자 최적 타이밍 공개",price:1800000,emoji:"⚡",hint:"⚡ 레버리지 최적 타이밍\n4라운드에 B종목 x2 레버리지 매수!\n7,000→16,000 상승 시 레버리지 수익률 228%\n단, 수수료 0.3%×2=0.6% 적용됨 주의"},
     ],
     eventPresets:[
       {id:"e1",name:"플래시 크래시",emoji:"💥",desc:"알고리즘 오작동으로 순간 급락",globalEffect:-15,stockEffects:{s1:-20,s4:-25,s2:-10,s3:-8,s5:-12},note:"순간 급락",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:50,duration:60,affectTarget:true},
@@ -291,9 +291,9 @@ const INIT_SS={
   stocks:BUILT_IN_TEMPLATES[0].stocks.map(s=>({...s})),
   rounds:BUILT_IN_TEMPLATES[0].rounds.map(r=>({...r})),
   shopItems:[
-    {id:"sh1",name:"내부자 제보 A",desc:"특정 종목 다음 라운드 방향",price:800000,emoji:"🕵️",hint:"힌트를 설정해주세요"},
-    {id:"sh2",name:"시장 분석 리포트",desc:"현재 라운드 전체 시장 흐름",price:500000,emoji:"📊",hint:"힌트를 설정해주세요"},
-    {id:"sh3",name:"VIP 정보 패키지",desc:"3라운드 전 종목 방향",price:2000000,emoji:"💡",hint:"힌트를 설정해주세요"},
+    {id:"sh1",name:"내부자 제보 A",desc:"특정 종목 다음 라운드 방향",price:2400000,emoji:"🕵️",hint:"힌트를 설정해주세요"},
+    {id:"sh2",name:"시장 분석 리포트",desc:"현재 라운드 전체 시장 흐름",price:1500000,emoji:"📊",hint:"힌트를 설정해주세요"},
+    {id:"sh3",name:"VIP 정보 패키지",desc:"3라운드 전 종목 방향",price:6000000,emoji:"💡",hint:"힌트를 설정해주세요"},
   ],
   eventPresets:makeEventPresets(),
   customTemplates:[],    // 사용자 저장 템플릿
@@ -593,8 +593,20 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
   const isUp = livePts[livePts.length - 1] >= livePts[0];
   const lc = isUp ? G.red : G.blue;
 
-  const mod = modifiedTargets?.[stock.id];
-  const showModified = mod && mod.round === round;
+  const segSize = Math.max(1, Math.floor(livePts.length / 5));
+  const liveCandles = [];
+  for (let i = 0; i < livePts.length; i += segSize) {
+    const seg = livePts.slice(i, i + segSize);
+    if (seg.length === 0) continue;
+    const open = seg[0], close = seg[seg.length - 1];
+    const high = Math.max(...seg), low = Math.min(...seg);
+    liveCandles.push({ open, close, high, low, live: true });
+  }
+  if (liveCandles.length > 0) {
+    liveCandles[liveCandles.length - 1].close = curPrice;
+  }
+  const liveCandleW = liveAreaW / Math.max(liveCandles.length, 1);
+  const liveCandleBodyW = Math.min(20, liveCandleW * 0.55);
 
   return (
     <svg width="100%" viewBox={`-48 -24 ${W + 60} ${H + 44}`} style={{ overflow: "visible", display: "block" }}>
@@ -624,12 +636,23 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
       {candles.length > 0 && (
         <line x1={candleAreaW} y1={-10} x2={candleAreaW} y2={H + 4} stroke={G.border} strokeWidth="1" strokeDasharray="3,2" />
       )}
-      {livePtCoords.length > 1 && (
-        <>
-          <path d={liveFill} fill={lc} opacity="0.1" />
-          <path d={liveD} fill="none" stroke={lc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      )}
+      {liveCandles.map((c, i) => {
+        const x = liveStartX + liveCandleW * i + liveCandleW / 2;
+        const isUp2 = c.close >= c.open;
+        const color = isUp2 ? G.red : G.blue;
+        const bodyTop = toY(Math.max(c.open, c.close));
+        const bodyBot = toY(Math.min(c.open, c.close));
+        const bodyH = Math.max(bodyBot - bodyTop, 2);
+        return (
+          <g key={`live-${i}`}>
+            <line x1={x} y1={toY(c.high)} x2={x} y2={bodyTop} stroke={color} strokeWidth={c.live ? 1.5 : 1}/>
+            <line x1={x} y1={bodyBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth={c.live ? 1.5 : 1}/>
+            <rect x={x - liveCandleBodyW / 2} y={bodyTop} width={liveCandleBodyW} height={bodyH}
+              fill={isUp2 ? color : "none"} stroke={color} strokeWidth={c.live ? 2 : 1.5} rx={2}
+              opacity={i === liveCandles.length - 1 ? 1 : 0.7}/>
+          </g>
+        );
+      })}
       {livePtCoords.length > 0 && (() => {
         const last = livePtCoords[livePtCoords.length - 1];
         return (
@@ -645,15 +668,6 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
       })()}
       <text x={liveStartX + liveAreaW / 2} y={H + 14} textAnchor="middle" fontSize="9.5"
         fill={lc} fontFamily="inherit" fontWeight="700">R{round}</text>
-      {showModified && (
-        <>
-          <line x1={liveStartX} y1={toY(mod.modifiedPrice)} x2={W} y2={toY(mod.modifiedPrice)}
-            stroke={G.orange} strokeWidth="1" strokeDasharray="4,2" />
-          <text x={liveStartX + 4} y={toY(mod.modifiedPrice) - 4} fontSize="8" fill={G.orange} fontFamily="inherit" fontWeight="700">
-            목표 {fmtN(mod.modifiedPrice)}
-          </text>
-        </>
-      )}
     </svg>
   );
 }
@@ -1569,6 +1583,26 @@ function UserApp(){
   const [toast,setToast]=useState({msg:"",show:false});
   const t2=msg=>showToast(setToast,msg);
 
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('sg_session');
+      if (saved) {
+        const { id, name } = JSON.parse(saved);
+        if (id && name && shared.teams?.[id]) {
+          setTeamId(id);
+          setTeamName(name);
+          setScreen("main");
+        }
+      }
+    } catch(e) {}
+  }, [shared.teams]);
+
+  useEffect(() => {
+    if (screen === "ended") {
+      try { sessionStorage.removeItem('sg_session'); } catch(e) {}
+    }
+  }, [screen]);
+
   useEffect(()=>{if(screen==="main"&&shared.phase==="ended")setScreen("ended");},[shared.phase,screen]);
   useEffect(()=>{if(screen==="ended"&&(shared.phase==="ready"||shared.phase==="round"))setScreen("main");},[shared.phase,screen]);
 
@@ -1611,6 +1645,9 @@ function UserApp(){
     const cred=shared.teamCredentials?.[name];
     if(!cred){setLoginErr("등록되지 않은 팀 이름입니다");return;}
     if(cred.pw!==pw){setLoginErr("비밀번호가 올바르지 않습니다");return;}
+    try {
+      sessionStorage.setItem('sg_session', JSON.stringify({ id: cred.id, name }));
+    } catch(e) {}
     setTeamId(cred.id);setTeamName(name);setLoginErr("");setScreen("main");
   };
 
@@ -1781,7 +1818,16 @@ function UserApp(){
         <div style={{background:G.white,padding:"env(safe-area-inset-top, 14px) 18px 16px",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
           {shared.notice&&<div style={{marginBottom:8}}><NoticeBanner notice={shared.notice}/></div>}
           {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent}/></div>}
-          <div onClick={()=>setScreen("main")} style={{fontSize:13,color:G.gray1,marginBottom:8,cursor:"pointer"}}>← 뒤로</div>
+          <div onClick={()=>setScreen("main")}
+            style={{display:"inline-flex",alignItems:"center",gap:6,
+              background:G.bg,border:`1.5px solid ${G.border}`,
+              borderRadius:10,padding:"9px 16px",cursor:"pointer",
+              marginBottom:12,transition:"background .15s"}}
+            onMouseDown={e=>e.currentTarget.style.background=G.border}
+            onMouseUp={e=>e.currentTarget.style.background=G.bg}>
+            <span style={{fontSize:18,lineHeight:1}}>←</span>
+            <span style={{fontSize:14,fontWeight:600,color:G.black}}>뒤로가기</span>
+          </div>
           <div style={{fontSize:13,color:G.gray1,marginBottom:2}}>{st.emoji} {st.code}</div>
           <div style={{fontSize:20,fontWeight:800,color:G.black,marginBottom:4}}>{st.name}</div>
           {isBlind?(
@@ -1840,10 +1886,24 @@ function UserApp(){
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <span style={{fontSize:14,color:G.gray1}}>수량</span>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <div onClick={()=>setQty(q=>Math.max(1,q-1))} style={{width:32,height:32,borderRadius:8,background:G.bg,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:20,userSelect:"none"}}>−</div>
-                  <span style={{fontSize:18,fontWeight:700,color:G.black,minWidth:32,textAlign:"center"}}>{qty}</span>
-                  <div onClick={()=>setQty(q=>Math.min(q+1,Math.floor(maxQty/leverage)||1))} style={{width:32,height:32,borderRadius:8,background:G.bg,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:20,userSelect:"none"}}>+</div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div onClick={()=>setQty(q=>Math.max(1,q-1))}
+                    style={{width:36,height:36,borderRadius:10,background:G.bg,display:"flex",alignItems:"center",
+                      justifyContent:"center",cursor:"pointer",fontSize:20,userSelect:"none",fontWeight:700,
+                      border:`1.5px solid ${G.border}`}}>−</div>
+                  <input
+                    type="number" value={qty} min={1} max={maxQty||1}
+                    onChange={e=>{
+                      const v=parseInt(e.target.value)||1;
+                      setQty(Math.max(1,Math.min(v,maxQty||1)));
+                    }}
+                    style={{width:64,textAlign:"center",border:`1.5px solid ${G.border}`,borderRadius:10,
+                      padding:"8px 4px",fontSize:17,fontWeight:700,fontFamily:"monospace",
+                      outline:"none",color:G.black,boxSizing:"border-box"}}/>
+                  <div onClick={()=>setQty(q=>Math.min(q+1,maxQty||1))}
+                    style={{width:36,height:36,borderRadius:10,background:G.bg,display:"flex",alignItems:"center",
+                      justifyContent:"center",cursor:"pointer",fontSize:20,userSelect:"none",fontWeight:700,
+                      border:`1.5px solid ${G.border}`}}>+</div>
                 </div>
               </div>
               {leverage>1&&<div style={{fontSize:12,color:G.orange,textAlign:"right",marginBottom:6}}>실제 주문량: {effectiveQty}주 (x{leverage})</div>}
