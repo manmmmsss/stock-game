@@ -444,37 +444,55 @@ function AdminApp(){
   const endGame=()=>{setShared(s=>({...s,phase:"ended"}));t2("게임 종료");};
   const resetGame = async () => {
     try {
-      // Firebase 데이터 완전 삭제 후 재설정
-      await fbSet(GAME_REF, null);
+      const snapshot = await get(GAME_REF);
+      const current = snapshot.val() || {};
 
-      // 팀 계정은 유지하면서 새 게임 상태로 초기화
-      const currentSnap = await get(GAME_REF);
-      const savedCreds = currentSnap.val()?.teamCredentials || {};
+      // 유지할 데이터 저장
+      const savedCredentials = current.teamCredentials || {};
+      const savedStocks = current.stocks || stocks.map(x => ({ ...x, prices: [...x.prices] }));
+      const savedShopItems = current.shopItems || shopItems.map(x => ({ ...x }));
+      const savedRounds = current.rounds || rounds.map(x => ({ ...x }));
+      const savedEventPresets = current.eventPresets || eventPresets.map(x => ({ ...x }));
+      const savedMaxRound = current.maxRound || maxRound;
+      const savedInitCash = current.initCash || initCash;
 
+      // 팀 자산만 초기화 (계정은 유지)
       const freshTeams = {};
-      for (const [name, { id, pw }] of Object.entries(savedCreds)) {
+      for (const [name, { id, pw }] of Object.entries(savedCredentials)) {
         freshTeams[id] = {
           name,
-          cash: initCash,
+          cash: savedInitCash,
           holdings: {},
           purchases: [],
+          history: [],
         };
       }
 
       const newState = removeUndefined({
-        ...INIT_SS,
-        stocks: stocks.map(x => ({ ...x, prices: [...x.prices] })),
-        shopItems: shopItems.map(x => ({ ...x })),
-        rounds: rounds.map(x => ({ ...x })),
-        eventPresets: eventPresets.map(x => ({ ...x })),
-        maxRound,
-        initCash,
-        teamCredentials: savedCreds,
+        // 게임 진행 상태만 초기화
+        phase: "ready",
+        round: 0,
+        roundStartedAt: null,
+        roundEndsAt: null,
+        activeEvent: null,
+        eventHistory: [],
+        notice: "",
+        noticeAt: null,
+        bonusPool: {},
+
+        // 아래는 모두 유지
+        teamCredentials: savedCredentials,
         teams: freshTeams,
+        stocks: savedStocks,
+        shopItems: savedShopItems,
+        rounds: savedRounds,
+        eventPresets: savedEventPresets,
+        maxRound: savedMaxRound,
+        initCash: savedInitCash,
       });
 
       await fbSet(GAME_REF, newState);
-      t2("게임 초기화 완료 ✓");
+      t2("게임 초기화 완료 ✓ (설정·팀 계정 유지)");
     } catch(e) {
       console.error("resetGame error:", e);
       t2("초기화 중 오류 발생");
