@@ -433,21 +433,43 @@ function AdminApp(){
   };
   const stopRound=()=>{setShared(s=>({...s,phase:"break",roundEndsAt:null,roundStartedAt:null}));t2("라운드 종료");};
   const endGame=()=>{setShared(s=>({...s,phase:"ended"}));t2("게임 종료");};
-  const resetGame=()=>{
-    setShared(()=>({...INIT_SS,
-      stocks:stocks.map(x=>({...x,prices:[...x.prices]})),
-      shopItems:shopItems.map(x=>({...x})),
-      rounds:rounds.map(x=>({...x})),
-      eventPresets:eventPresets.map(x=>({...x})),
-      maxRound,initCash,
-      teamCredentials:SS.teamCredentials||{},
-      teams:Object.fromEntries(
-        Object.entries(SS.teamCredentials||{}).map(([,{id}])=>
-          [id,{...SS.teams?.[id],cash:initCash,holdings:{},purchases:[]}]
-        )
-      ),
-    }));
-    t2("게임 초기화 (팀 계정 유지)");
+  const resetGame = async () => {
+    try {
+      // Firebase 데이터 완전 삭제 후 재설정
+      await fbSet(GAME_REF, null);
+
+      // 팀 계정은 유지하면서 새 게임 상태로 초기화
+      const currentSnap = await get(GAME_REF);
+      const savedCreds = currentSnap.val()?.teamCredentials || {};
+
+      const freshTeams = {};
+      for (const [name, { id, pw }] of Object.entries(savedCreds)) {
+        freshTeams[id] = {
+          name,
+          cash: initCash,
+          holdings: {},
+          purchases: [],
+        };
+      }
+
+      const newState = removeUndefined({
+        ...INIT_SS,
+        stocks: stocks.map(x => ({ ...x, prices: [...x.prices] })),
+        shopItems: shopItems.map(x => ({ ...x })),
+        rounds: rounds.map(x => ({ ...x })),
+        eventPresets: eventPresets.map(x => ({ ...x })),
+        maxRound,
+        initCash,
+        teamCredentials: savedCreds,
+        teams: freshTeams,
+      });
+
+      await fbSet(GAME_REF, newState);
+      t2("게임 초기화 완료 ✓");
+    } catch(e) {
+      console.error("resetGame error:", e);
+      t2("초기화 중 오류 발생");
+    }
   };
 
   /* 이벤트 발동 */
