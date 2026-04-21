@@ -107,12 +107,17 @@ const pctOf=(cur,prev)=>prev?((cur-prev)/prev*100):0;
 /* ── 템플릿 정의 ── */
 const makeRound=(r,min=5)=>({id:`r${r}`,label:`Round ${r}`,durationMin:min,blind:false,dividends:{}});
 
-const BUILT_IN_TEMPLATES=[
+const BUILT_IN_TEMPLATES = [
   {
     id:"tpl1", name:"🏦 기본형 (3라운드)", builtIn:true,
     desc:"가장 기본적인 설정. 처음 진행할 때 추천",
-    initCash:10000000, maxRound:3, feeRate:0.1, leverageEnabled:false, leverageMax:2,
-    rounds:[makeRound(1,5),makeRound(2,5),makeRound(3,5)],
+    initCash:10000000, maxRound:3, feeRate:0.1,
+    leverageEnabled:false, leverageMax:2,
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:5,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:5,blind:false,dividends:{s3:500,s1:300}},
+      {id:"r3",label:"Round 3",durationMin:5,blind:false,dividends:{s1:800,s3:1000,s5:500}},
+    ],
     stocks:[
       {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[65000,72000,58000],totalSupply:0,listed:true},
       {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,38000,51000],totalSupply:0,listed:true},
@@ -120,61 +125,142 @@ const BUILT_IN_TEMPLATES=[
       {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,88000,103000],totalSupply:0,listed:true},
       {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,445000,398000],totalSupply:0,listed:true},
     ],
+    shopItems:[
+      {id:"sh1",name:"내부자 제보 A",desc:"다음 라운드에서 가장 많이 오를 종목을 귀띔해드립니다",price:800000,emoji:"🕵️",hint:"💡 힌트: 3라운드에서 현대자동차가 강세를 보일 것으로 예상됩니다. 글로벌 전기차 수요 증가 때문입니다."},
+      {id:"sh2",name:"시장 분석 리포트",desc:"현재 시장 흐름과 섹터별 동향을 분석해드립니다",price:500000,emoji:"📊",hint:"📊 분석: 현재 IT 섹터(카카오, 네이버)는 조정 국면. 반도체(삼성전자)는 저점 매수 기회. 에너지(LG에너지솔루션)는 강세 지속 예상."},
+      {id:"sh3",name:"VIP 정보 패키지",desc:"3라운드 전 종목 방향 + 추천 포트폴리오 제공",price:2000000,emoji:"💡",hint:"🔮 VIP 정보\n삼성전자: ▼ 하락 예상\n카카오: ▲ 반등 예상\n네이버: ▼ 조정 지속\n현대자동차: ▲ 강세\nLG에너지솔루션: ▲ 강세\n\n추천: 카카오 + 현대차 + LG에너지 집중 매수"},
+      {id:"sh4",name:"배당 수익률 리포트",desc:"라운드별 배당금이 가장 높은 종목 공개",price:300000,emoji:"💰",hint:"배당 TOP: 2라운드 네이버(주당 500원), 3라운드 삼성전자(주당 800원). 장기보유 전략 추천!"},
+    ],
+    eventPresets:[
+      {id:"e1",name:"반도체 수출 호조",emoji:"💾",desc:"글로벌 반도체 수요 급증",globalEffect:5,stockEffects:{s1:20,s5:15,s2:-5,s3:-3,s4:3},note:"삼성 급등",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:40,duration:90,affectTarget:true},
+      {id:"e2",name:"금리 인상 발표",emoji:"📉",desc:"한국은행 기준금리 0.5% 인상",globalEffect:-10,stockEffects:{s1:-8,s2:-15,s3:-12,s4:-5,s5:-10},note:"성장주 타격",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:3,probability:35,duration:120,affectTarget:true},
+      {id:"e3",name:"외국인 대규모 매수",emoji:"🌏",desc:"외국인 투자자 한국 주식 대량 매입",globalEffect:8,stockEffects:{},note:"전체 상승",autoTrigger:false,triggerIntervalMin:2,triggerIntervalMax:4,probability:30,duration:60,affectTarget:true},
+      {id:"e4",name:"코스피 서킷브레이커",emoji:"🛑",desc:"급락으로 거래 일시 정지",globalEffect:-18,stockEffects:{},note:"전체 급락",autoTrigger:false,triggerIntervalMin:3,triggerIntervalMax:5,probability:20,duration:0,affectTarget:true},
+    ],
   },
   {
     id:"tpl2", name:"🎭 롤러코스터 (4라운드)", builtIn:true,
-    desc:"급등락이 심한 고위험 고수익 설정",
-    initCash:10000000, maxRound:4, feeRate:0.2, leverageEnabled:true, leverageMax:2,
-    rounds:[makeRound(1,4),makeRound(2,4),makeRound(3,4),makeRound(4,4)],
+    desc:"급등락이 심한 고위험 고수익. 레버리지 투자 가능",
+    initCash:10000000, maxRound:4, feeRate:0.2,
+    leverageEnabled:true, leverageMax:2,
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:4,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:4,blind:false,dividends:{s2:1000}},
+      {id:"r3",label:"Round 3",durationMin:4,blind:true,dividends:{}},
+      {id:"r4",label:"Round 4",durationMin:4,blind:false,dividends:{s1:2000,s5:1500}},
+    ],
     stocks:[
-      {id:"s1",name:"테슬라",code:"TSLA",emoji:"🚗",prices:[250000,380000,180000,420000],totalSupply:100,listed:true},
-      {id:"s2",name:"바이오랩",code:"BIO",emoji:"💊",prices:[12000,28000,8000,35000],totalSupply:200,listed:true},
-      {id:"s3",name:"코인베이스",code:"COIN",emoji:"🪙",prices:[85000,140000,45000,160000],totalSupply:0,listed:true},
+      {id:"s1",name:"테슬라코리아",code:"TSLA",emoji:"🚗",prices:[250000,380000,180000,420000],totalSupply:100,listed:true},
+      {id:"s2",name:"바이오제약",code:"BIO",emoji:"💊",prices:[12000,28000,8000,35000],totalSupply:200,listed:true},
+      {id:"s3",name:"코인뱅크",code:"COIN",emoji:"🪙",prices:[85000,140000,45000,160000],totalSupply:0,listed:true},
       {id:"s4",name:"메타버스Inc",code:"META",emoji:"🎮",prices:[32000,15000,48000,22000],totalSupply:0,listed:true},
       {id:"s5",name:"그린에너지",code:"GRN",emoji:"🌱",prices:[45000,52000,38000,68000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"레버리지 가이드",desc:"레버리지 투자 최적 타이밍 분석 제공",price:600000,emoji:"⚡",hint:"⚡ 레버리지 전략\n3라운드(블라인드)에서 테슬라코리아가 급락합니다.\n2라운드에 테슬라 매도 후 4라운드에 x2 레버리지 매수 추천!\n바이오제약은 2라운드 고점에서 반드시 매도하세요."},
+      {id:"sh2",name:"3라운드 블라인드 해제",desc:"블라인드 라운드의 예상 가격대를 알려드립니다",price:1500000,emoji:"🙈",hint:"🔓 블라인드 해제\n3라운드 예상가:\n테슬라코리아: 180,000 (급락)\n바이오제약: 8,000 (급락)\n코인뱅크: 45,000 (하락)\n메타버스: 48,000 (상승!)\n그린에너지: 38,000 (하락)"},
+      {id:"sh3",name:"내부자 폐지 정보",desc:"이번 게임에서 폐지될 종목 사전 정보",price:2500000,emoji:"☠️",hint:"☠️ 극비 정보\n코인뱅크는 3라운드 중 규제 이슈로 폐지 예정!\n지금 당장 전량 매도하세요. 폐지 시 현재가로 강제 매도됩니다."},
+      {id:"sh4",name:"급등주 포착",desc:"4라운드에서 가장 크게 오를 종목 1개 공개",price:1000000,emoji:"🚀",hint:"🚀 4라운드 급등주: 바이오제약!\n3라운드 저점(8,000)에서 최대한 매수 후 4라운드 고점(35,000)에서 매도. 수익률 337% 예상"},
+    ],
+    eventPresets:[
+      {id:"e1",name:"FDA 신약 승인",emoji:"💊",desc:"바이오제약 신약 FDA 승인 소식",globalEffect:0,stockEffects:{s2:40,s1:5,s3:10,s4:8,s5:3},note:"바이오 급등",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:50,duration:120,affectTarget:true},
+      {id:"e2",name:"코인 규제 발표",emoji:"🚫",desc:"정부 가상자산 전면 규제",globalEffect:-5,stockEffects:{s3:-35,s1:-10,s2:-5,s4:5,s5:0},note:"코인 급락",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:3,probability:45,duration:0,affectTarget:true},
+      {id:"e3",name:"메타버스 대기업 투자",emoji:"🎮",desc:"글로벌 빅테크 메타버스 2조 투자 발표",globalEffect:3,stockEffects:{s4:35,s1:8,s2:5,s3:10,s5:5},note:"메타 급등",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:3,probability:40,duration:90,affectTarget:true},
+      {id:"e4",name:"테슬라 리콜 사태",emoji:"🔧",desc:"전 세계 50만대 배터리 결함 리콜",globalEffect:-3,stockEffects:{s1:-25,s5:-15,s2:5,s3:-5,s4:-8},note:"테슬라 급락",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:4,probability:35,duration:0,affectTarget:true},
+      {id:"e5",name:"그린뉴딜 정책 발표",emoji:"🌱",desc:"정부 탄소중립 100조 투자",globalEffect:5,stockEffects:{s5:28,s1:10,s2:3,s3:2,s4:8},note:"그린 급등",autoTrigger:false,triggerIntervalMin:2,triggerIntervalMax:4,probability:30,duration:120,affectTarget:true},
     ],
   },
   {
     id:"tpl3", name:"🕵️ 블라인드 배틀 (3라운드)", builtIn:true,
-    desc:"2라운드가 블라인드 — 아무것도 모른 채 투자",
-    initCash:8000000, maxRound:3, feeRate:0.15, leverageEnabled:false, leverageMax:2,
-    rounds:[makeRound(1,5),{...makeRound(2,5),blind:true},{...makeRound(3,5),blind:false}],
+    desc:"2라운드 블라인드 — 정보가 곧 돈! 상점이 핵심",
+    initCash:8000000, maxRound:3, feeRate:0.15,
+    leverageEnabled:false, leverageMax:2,
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:5,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:5,blind:true,dividends:{}},
+      {id:"r3",label:"Round 3",durationMin:5,blind:false,dividends:{s2:800,s4:1200}},
+    ],
     stocks:[
-      {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[65000,72000,58000],totalSupply:0,listed:true},
-      {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,60000,38000],totalSupply:0,listed:true},
-      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,150000,210000],totalSupply:0,listed:true},
-      {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,115000,75000],totalSupply:0,listed:true},
-      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,390000,480000],totalSupply:0,listed:true},
+      {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[65000,48000,72000],totalSupply:0,listed:true},
+      {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,62000,38000],totalSupply:0,listed:true},
+      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,155000,210000],totalSupply:0,listed:true},
+      {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,118000,75000],totalSupply:0,listed:true},
+      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,380000,490000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"블라인드 힌트 A",desc:"2라운드 특정 종목의 방향만 알려드립니다 (상승/하락)",price:400000,emoji:"🔍",hint:"2라운드 상승 종목: 카카오, 현대자동차\n2라운드 하락 종목: 삼성전자, 네이버, LG에너지솔루션"},
+      {id:"sh2",name:"블라인드 완전 해제",desc:"2라운드 전 종목 예상 가격 공개",price:1200000,emoji:"🔓",hint:"🔓 2라운드 완전 해제\n삼성전자: 48,000 (▼ -26%)\n카카오: 62,000 (▲ +38%)\n네이버: 155,000 (▼ -14%)\n현대자동차: 118,000 (▲ +24%)\nLG에너지솔루션: 380,000 (▼ -10%)"},
+      {id:"sh3",name:"3라운드 내부 정보",desc:"3라운드에서 가장 크게 움직일 종목 공개",price:1000000,emoji:"🕵️",hint:"3라운드 주목 종목:\n▲ 네이버: 155,000→210,000 (+35%)\n▲ LG에너지솔루션: 380,000→490,000 (+29%)\n▼ 현대자동차: 118,000→75,000 (-36%) ⚠️ 고점 매도 필수!"},
+      {id:"sh4",name:"배당 알림",desc:"3라운드 배당금 지급 종목과 금액 공개",price:200000,emoji:"💰",hint:"3라운드 배당 지급:\n카카오: 주당 800원\n현대자동차: 주당 1,200원\n→ 현대차 3라운드 전에 매수해두면 배당+시세차익 가능!"},
+    ],
+    eventPresets:[
+      {id:"e1",name:"IT 섹터 쇼크",emoji:"💻",desc:"글로벌 빅테크 동반 급락",globalEffect:-8,stockEffects:{s2:-20,s3:-18,s1:-10,s4:5,s5:3},note:"IT 하락",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:45,duration:120,affectTarget:true},
+      {id:"e2",name:"한류 경제 효과",emoji:"🌏",desc:"K-콘텐츠 글로벌 흥행 → 카카오·네이버 수혜",globalEffect:3,stockEffects:{s2:18,s3:15,s1:5,s4:3,s5:2},note:"IT 급등",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:3,probability:40,duration:90,affectTarget:true},
+      {id:"e3",name:"현대차 파업",emoji:"🏭",desc:"전국 공장 동시 파업 돌입",globalEffect:-2,stockEffects:{s4:-22,s1:-3,s2:-2,s3:-2,s5:-5},note:"현대차 급락",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:4,probability:35,duration:0,affectTarget:true},
+      {id:"e4",name:"배터리 기술 혁신",emoji:"🔋",desc:"LG에너지, 전고체 배터리 상용화 발표",globalEffect:4,stockEffects:{s5:25,s1:8,s4:10,s2:3,s3:2},note:"에너지 급등",autoTrigger:false,triggerIntervalMin:2,triggerIntervalMax:4,probability:30,duration:120,affectTarget:true},
     ],
   },
   {
     id:"tpl4", name:"💸 배당왕 (3라운드)", builtIn:true,
-    desc:"배당금이 핵심 — 장기 보유 전략이 유리",
-    initCash:10000000, maxRound:3, feeRate:0.1, leverageEnabled:false, leverageMax:2,
+    desc:"배당금이 핵심! 장기 보유 vs 시세차익 전략 대결",
+    initCash:10000000, maxRound:3, feeRate:0.1,
+    leverageEnabled:false, leverageMax:2,
     rounds:[
-      {...makeRound(1,6),dividends:{s1:500,s3:1000}},
-      {...makeRound(2,6),dividends:{s2:800,s4:600}},
-      {...makeRound(3,6),dividends:{s1:1000,s3:1500,s5:2000}},
+      {id:"r1",label:"Round 1",durationMin:6,blind:false,dividends:{s1:500,s3:800}},
+      {id:"r2",label:"Round 2",durationMin:6,blind:false,dividends:{s2:1200,s4:600,s5:1000}},
+      {id:"r3",label:"Round 3",durationMin:6,blind:false,dividends:{s1:1500,s2:800,s3:2000,s4:1000,s5:2500}},
     ],
     stocks:[
       {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[65000,68000,72000],totalSupply:0,listed:true},
       {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,47000,50000],totalSupply:0,listed:true},
-      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,185000,190000],totalSupply:0,listed:true},
+      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,185000,192000],totalSupply:0,listed:true},
       {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,98000,102000],totalSupply:0,listed:true},
-      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,430000,450000],totalSupply:0,listed:true},
+      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,432000,448000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"배당 수익률 계산기",desc:"전 종목 라운드별 배당 수익률 분석 자료",price:300000,emoji:"📊",hint:"💰 배당 총액 시뮬레이션 (100주 보유 기준)\n삼성전자: R1(5만)+R3(15만) = 20만원\n카카오: R2(12만)+R3(8만) = 20만원\n네이버: R1(8만)+R3(20만) = 28만원 ← 최고!\nLG에너지솔루션: R2(10만)+R3(25만) = 35만원 ← 주가 비쌈 주의"},
+      {id:"sh2",name:"배당 귀족 포트폴리오",desc:"배당+시세차익 동시 극대화 추천 포트폴리오",price:800000,emoji:"👑",hint:"👑 최적 포트폴리오\n네이버 30% + LG에너지솔루션 30% + 삼성전자 40%\n이유: 네이버·LG는 배당 높음, 삼성은 안정적 상승"},
+      {id:"sh3",name:"3라운드 배당 극비 정보",desc:"3라운드 배당금이 가장 높은 종목 Top3",price:600000,emoji:"🏆",hint:"3라운드 배당 Top3\n🥇 LG에너지솔루션: 주당 2,500원\n🥈 네이버: 주당 2,000원\n🥉 삼성전자: 주당 1,500원\n→ 3라운드 전 LG에너지 최대한 확보!"},
+      {id:"sh4",name:"이벤트 방어 전략",desc:"배당 중 이벤트 발생 시 손실 최소화 방법",price:400000,emoji:"🛡️",hint:"🛡️ 방어 전략\n이벤트 발생 시 배당주는 상대적으로 덜 떨어집니다.\n급락 이벤트 시 오히려 저점 매수 기회!\n삼성전자·네이버는 이벤트 충격이 작은 방어주입니다."},
+    ],
+    eventPresets:[
+      {id:"e1",name:"배당 시즌 호황",emoji:"💰",desc:"기관투자자 배당주 대규모 매입",globalEffect:6,stockEffects:{s1:12,s3:10,s5:8,s2:5,s4:6},note:"배당주 강세",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:4,probability:40,duration:120,affectTarget:true},
+      {id:"e2",name:"경기침체 우려",emoji:"😰",desc:"GDP 성장률 예상치 하회",globalEffect:-7,stockEffects:{s1:-5,s2:-10,s3:-8,s4:-12,s5:-6},note:"경기민감주 하락",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:3,probability:35,duration:90,affectTarget:true},
+      {id:"e3",name:"ESG 펀드 대규모 유입",emoji:"🌿",desc:"친환경 기업 집중 투자",globalEffect:3,stockEffects:{s5:15,s3:8,s1:5,s4:3,s2:4},note:"에너지·IT 강세",autoTrigger:true,triggerIntervalMin:3,triggerIntervalMax:5,probability:30,duration:120,affectTarget:true},
+      {id:"e4",name:"외환위기 공포",emoji:"💱",desc:"원달러 환율 1500원 돌파",globalEffect:-12,stockEffects:{s1:-8,s2:-15,s3:-12,s4:-10,s5:-10},note:"전체 급락",autoTrigger:false,triggerIntervalMin:3,triggerIntervalMax:6,probability:20,duration:0,affectTarget:true},
     ],
   },
   {
     id:"tpl5", name:"⚡ 스피드 런 (5라운드)", builtIn:true,
-    desc:"라운드당 3분, 총 5라운드 — 빠른 판단력 싸움",
-    initCash:5000000, maxRound:5, feeRate:0.3, leverageEnabled:true, leverageMax:2,
-    rounds:[makeRound(1,3),makeRound(2,3),makeRound(3,3),makeRound(4,3),makeRound(5,3)],
+    desc:"라운드당 3분, 빠른 판단력 싸움! 레버리지·수수료 주의",
+    initCash:5000000, maxRound:5, feeRate:0.3,
+    leverageEnabled:true, leverageMax:2,
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:3,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:3,blind:false,dividends:{s3:200}},
+      {id:"r3",label:"Round 3",durationMin:3,blind:true,dividends:{}},
+      {id:"r4",label:"Round 4",durationMin:3,blind:false,dividends:{s1:500,s5:300}},
+      {id:"r5",label:"Round 5",durationMin:3,blind:false,dividends:{s2:400,s4:600}},
+    ],
     stocks:[
-      {id:"s1",name:"A주",code:"A001",emoji:"🔴",prices:[10000,12000,9000,14000,11000],totalSupply:0,listed:true},
-      {id:"s2",name:"B주",code:"B001",emoji:"🔵",prices:[10000,8000,13000,7000,15000],totalSupply:0,listed:true},
-      {id:"s3",name:"C주",code:"C001",emoji:"🟢",prices:[10000,11000,10500,12000,13000],totalSupply:0,listed:true},
-      {id:"s4",name:"D주",code:"D001",emoji:"🟡",prices:[10000,9500,8000,11000,10000],totalSupply:0,listed:true},
-      {id:"s5",name:"E주",code:"E001",emoji:"⚫",prices:[10000,10500,11500,10000,16000],totalSupply:0,listed:true},
+      {id:"s1",name:"A종목",code:"A001",emoji:"🔴",prices:[10000,13000,9000,15000,11000],totalSupply:300,listed:true},
+      {id:"s2",name:"B종목",code:"B001",emoji:"🔵",prices:[10000,8000,13000,7000,16000],totalSupply:300,listed:true},
+      {id:"s3",name:"C종목",code:"C001",emoji:"🟢",prices:[10000,11000,10500,12500,13500],totalSupply:0,listed:true},
+      {id:"s4",name:"D종목",code:"D001",emoji:"🟡",prices:[10000,9000,8000,11500,10500],totalSupply:0,listed:true},
+      {id:"s5",name:"E종목",code:"E001",emoji:"⚫",prices:[10000,10800,11800,10200,17000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"급등 예고 알림",desc:"다음 라운드 급등 종목 1개만 공개",price:500000,emoji:"🚀",hint:"🚀 급등 예고\n5라운드에서 B종목과 E종목이 동시 급등!\nB종목 7,000→16,000 (+128%), E종목 10,200→17,000 (+67%)\n4라운드에 저점 매수 필수!"},
+      {id:"sh2",name:"블라인드 완전 공개",desc:"3라운드 블라인드 전 종목 가격 공개",price:800000,emoji:"🔓",hint:"🔓 3라운드 실제 가격\nA종목: 9,000 (▼)\nB종목: 13,000 (▲)\nC종목: 10,500 (→)\nD종목: 8,000 (▼▼)\nE종목: 11,800 (▲)\n→ D종목 절대 보유금지!"},
+      {id:"sh3",name:"수수료 절약 전략",desc:"0.3% 수수료 최소화 투자 전략 가이드",price:200000,emoji:"💡",hint:"💡 수수료 절약 전략\n매 라운드 매매하면 수수료로 자산 3% 소모!\n핵심 종목만 골라 2~3번만 매매하세요.\n추천: 1라운드 매수 → 4~5라운드 매도 장기 보유"},
+      {id:"sh4",name:"레버리지 타이밍",desc:"레버리지 x2 투자 최적 타이밍 공개",price:600000,emoji:"⚡",hint:"⚡ 레버리지 최적 타이밍\n4라운드에 B종목 x2 레버리지 매수!\n7,000→16,000 상승 시 레버리지 수익률 228%\n단, 수수료 0.3%×2=0.6% 적용됨 주의"},
+    ],
+    eventPresets:[
+      {id:"e1",name:"플래시 크래시",emoji:"💥",desc:"알고리즘 오작동으로 순간 급락",globalEffect:-15,stockEffects:{s1:-20,s4:-25,s2:-10,s3:-8,s5:-12},note:"순간 급락",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:50,duration:60,affectTarget:true},
+      {id:"e2",name:"뉴스 호재 폭탄",emoji:"📢",desc:"복수 기업 동시 호재 발표",globalEffect:12,stockEffects:{s2:20,s5:18,s1:10,s3:8,s4:5},note:"급등",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:50,duration:60,affectTarget:true},
+      {id:"e3",name:"공매도 세력 등장",emoji:"🐻",desc:"헤지펀드 대규모 공매도",globalEffect:-8,stockEffects:{s1:-18,s3:-12,s2:-5,s4:-10,s5:-8},note:"A·D 급락",autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:3,probability:45,duration:90,affectTarget:true},
+      {id:"e4",name:"개미 투자자 결집",emoji:"🐜",desc:"SNS 결집으로 특정 종목 급등",globalEffect:5,stockEffects:{s2:30,s4:15,s1:5,s3:5,s5:8},note:"B종목 폭등",autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:3,probability:40,duration:90,affectTarget:true},
+      {id:"e5",name:"서킷브레이커",emoji:"🛑",desc:"급등으로 거래 일시 정지",globalEffect:-5,stockEffects:{s5:-20,s2:-15,s1:-8,s3:-5,s4:-10},note:"전체 조정",autoTrigger:false,triggerIntervalMin:2,triggerIntervalMax:4,probability:25,duration:0,affectTarget:true},
     ],
   },
 ];
@@ -644,15 +730,35 @@ function AdminApp(){
   const [editingTpl,setEditingTpl]=useState(null);
 
   // 템플릿 적용
-  const applyTemplate=tpl=>{
-    const s=tpl.stocks.map(x=>({...x,prices:[...x.prices]}));
-    const r=tpl.rounds.map(x=>({...x}));
-    setStocks(s);setRounds(r);
-    setMaxRound(tpl.maxRound);setInitCash(tpl.initCash);
-    setFeeRate(tpl.feeRate??0.1);
-    setLeverageEnabled(tpl.leverageEnabled??false);
-    setLeverageMax(tpl.leverageMax??2);
-    t2(`"${tpl.name}" 템플릿 적용됨`);
+  const applyTemplate = tpl => {
+    const s = tpl.stocks.map(x => ({ ...x, prices: [...x.prices] }));
+    const r = tpl.rounds.map(x => ({ ...x, dividends: { ...(x.dividends || {}) } }));
+    const si = tpl.shopItems ? tpl.shopItems.map(x => ({ ...x })) : shopItems;
+    const ep = tpl.eventPresets ? tpl.eventPresets.map(x => ({ ...x, stockEffects: { ...(x.stockEffects || {}) } })) : eventPresets;
+    setStocks(s);
+    setRounds(r);
+    setShopItems(si);
+    setEventPresets(ep);
+    setMaxRound(tpl.maxRound);
+    setInitCash(tpl.initCash);
+    setFeeRate(tpl.feeRate ?? 0.1);
+    setLeverageEnabled(tpl.leverageEnabled ?? false);
+    setLeverageMax(tpl.leverageMax ?? 2);
+
+    setShared(ss => ({
+      ...ss,
+      stocks: s,
+      rounds: r,
+      shopItems: si,
+      eventPresets: ep,
+      maxRound: tpl.maxRound,
+      initCash: tpl.initCash,
+      feeRate: tpl.feeRate ?? 0.1,
+      leverageEnabled: tpl.leverageEnabled ?? false,
+      leverageMax: tpl.leverageMax ?? 2,
+    }));
+
+    t2(`"${tpl.name}" 적용 완료 ✓`);
   };
 
   // 현재 설정 템플릿으로 저장
