@@ -324,28 +324,34 @@ const INIT_SS={
 function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets) {
   if (!stock || round < 1) return stock?.prices?.[0] ?? 0;
   const ri = Math.min(round - 1, stock.prices.length - 1);
-
-  // 수정된 목표가가 있으면 사용
   const mod = modifiedTargets?.[stock.id];
-  const target = (mod && mod.round === round)
-    ? mod.modifiedPrice
-    : stock.prices[ri];
-
+  const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
   const prev = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
-
   if (!roundStartedAt || !roundEndsAt) return target;
   const now = Date.now();
   const total = roundEndsAt - roundStartedAt;
   const t = Math.min(Math.max((now - roundStartedAt) / total, 0), 1);
-  let base = prev + (target - prev) * t;
+  const base = prev + (target - prev) * t;
 
-  const noiseSeed = Math.floor(now / 2000);
-  const noise = (Math.sin(noiseSeed * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.5 + 0.5) * 2 - 1;
-  const noiseRange = Math.abs(target - prev) * 0.08 + base * 0.015;
-  let price = Math.round(base + noise * noiseRange);
+  // 노이즈: 2초 단위 사인파 + 고주파 혼합
+  const s1 = Math.floor(now / 2000);
+  const s2 = Math.floor(now / 800);
+  const s3 = Math.floor(now / 400);
+  const n1 = Math.sin(s1 * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.6;
+  const n2 = Math.sin(s2 * 6271 + (stock.id?.charCodeAt(1) || 2) * 31337) * 0.3;
+  const n3 = Math.sin(s3 * 3847 + (stock.id?.charCodeAt(2) || 3) * 17239) * 0.1;
+  const noise = n1 + n2 + n3; // -1 ~ +1
 
-  // activeEvent는 이미 modifiedTargets에 반영됐으므로 제거
-  return Math.max(price, 1);
+  // 노이즈 크기: 시작가~목표가 차이의 15% + 현재가의 2%
+  const noiseRange = Math.abs(target - prev) * 0.15 + base * 0.02;
+  const price = Math.round(base + noise * noiseRange);
+
+  let final = Math.max(price, 1);
+  if (activeEvent) {
+    const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
+    final = Math.round(final * (1 + eff / 100));
+  }
+  return Math.max(final, 1);
 }
 
 // 자동 이벤트 타이머 + 가격 기록 훅
@@ -546,7 +552,7 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, priceHistory }) {
   const [, tick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => tick(t => t + 1), 1000);
+    const id = setInterval(() => tick(t => t + 1), 800);
     return () => clearInterval(id);
   }, []);
 
@@ -562,17 +568,18 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
 
   const ri = Math.min(round - 1, stock.prices.length - 1);
   const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
+  const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
 
-  // ── 이전 라운드 캔들 ──
+  // ── 이전 라운드 캔들 (확정) ──
   const prevCandles = [];
   for (let i = 0; i < ri; i++) {
-    const open = i === 0 ? stock.prices[0] : stock.prices[i - 1];
-    const close = stock.prices[i];
-    const spread = Math.abs(close - open) * 0.3 + close * 0.01;
+    const o = i === 0 ? stock.prices[0] : stock.prices[i - 1];
+    const c = stock.prices[i];
+    const spread = Math.abs(c - o) * 0.25 + Math.min(o, c) * 0.012;
     prevCandles.push({
-      open, close,
-      high: Math.max(open, close) + spread,
-      low: Math.min(open, close) - spread,
+      open: o, close: c,
+      high: Math.max(o, c) + spread,
+      low: Math.min(o, c) - spread,
       label: `R${i + 1}`,
     });
   }
@@ -583,76 +590,77 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
     ? rawHistory.filter(p => roundStartedAt && p.t >= roundStartedAt)
     : [];
 
-  // 현재가 항상 포함
   const allPts = history.map(p => p.price);
-  if (allPts.length === 0) {
-    allPts.push(ri > 0 ? stock.prices[ri - 1] : stock.prices[0]);
-  }
-  allPts.push(curPrice);
+  if (allPts.length === 0) allPts.push(startPrice);
+  if (allPts[allPts.length - 1] !== curPrice) allPts.push(curPrice);
 
-  // 캔들 집계: 6~24개 목표
-  const TARGET = Math.max(6, Math.min(24, allPts.length));
+  // 캔들 집계 — 최소 8개 목표
+  const TARGET = Math.max(8, Math.min(30, Math.floor(allPts.length / 3)));
   const segSize = Math.max(1, Math.floor(allPts.length / TARGET));
   const liveCandles = [];
+
   for (let i = 0; i < allPts.length; i += segSize) {
-    const seg = allPts.slice(i, i + segSize);
+    const seg = allPts.slice(i, Math.min(i + segSize, allPts.length));
     if (seg.length === 0) continue;
+    const isLast = i + segSize >= allPts.length;
     const open = seg[0];
-    const close = seg[seg.length - 1];
-    const high = Math.max(...seg);
-    const low = Math.min(...seg);
-    const isLastSeg = i + segSize >= allPts.length;
+    const close = isLast ? curPrice : seg[seg.length - 1];
+    const rawHigh = Math.max(...seg);
+    const rawLow = Math.min(...seg);
+    // 꼬리 강제 추가 (최소 몸통의 30%)
+    const body = Math.abs(close - open);
+    const minTail = Math.max(body * 0.3, close * 0.004);
     liveCandles.push({
       open,
-      close: isLastSeg ? curPrice : close,
-      high: isLastSeg ? Math.max(high, curPrice) : high,
-      low: isLastSeg ? Math.min(low, curPrice) : low,
-      isLast: isLastSeg,
+      close,
+      high: rawHigh + minTail,
+      low: rawLow - minTail,
+      isLast,
     });
   }
+
   if (liveCandles.length === 0) {
-    const open2 = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
-    liveCandles.push({ open: open2, close: curPrice, high: Math.max(open2, curPrice), low: Math.min(open2, curPrice), isLast: true });
+    liveCandles.push({
+      open: startPrice, close: curPrice,
+      high: Math.max(startPrice, curPrice) * 1.008,
+      low: Math.min(startPrice, curPrice) * 0.992,
+      isLast: true,
+    });
   }
 
-  // ── Y축: 전체 범위 고정 (라운드 시작가 ~ 목표가 기준) ──
-  const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
-  const endPrice = stock.prices[ri];
+  // ── Y축: 현재 라운드 가격 기준으로 타이트하게 ──
   const allForRange = [
     ...prevCandles.flatMap(c => [c.high, c.low]),
     ...liveCandles.flatMap(c => [c.high, c.low]),
-    startPrice, endPrice,
   ];
-  // 범위를 충분히 넓게 고정 (캔들이 가만히 있는 문제 해결)
   const dataMin = Math.min(...allForRange);
   const dataMax = Math.max(...allForRange);
-  const padding = (dataMax - dataMin) * 0.2 + dataMin * 0.01;
-  const minP = dataMin - padding;
-  const maxP = dataMax + padding;
+  // 타이트한 패딩 (5%)
+  const pad = (dataMax - dataMin) * 0.12 + dataMin * 0.005;
+  const minP = dataMin - pad;
+  const maxP = dataMax + pad;
   const range = maxP - minP || 1;
 
-  const W = 300, H = 140;
-  const toY = p => Math.max(0, Math.min(H, H - ((p - minP) / range) * H));
+  const W = 300, H = 150;
+  const toY = p => Math.max(1, Math.min(H - 1, H - ((p - minP) / range) * H));
 
   // ── 레이아웃 ──
   const totalSlots = prevCandles.length + liveCandles.length + 1;
-  const slotW = W / totalSlots;
-  const bodyW = Math.max(4, Math.min(18, slotW * 0.65));
+  const slotW = W / Math.max(totalSlots, 6);
+  const bodyW = Math.max(5, Math.min(20, slotW * 0.6));
 
-  // 눈금 5개
-  const grids = Array.from({ length: 5 }, (_, i) => {
-    const p = minP + (range / 4) * i;
+  // 눈금 4개
+  const grids = Array.from({ length: 4 }, (_, i) => {
+    const p = minP + (range / 3) * i;
     return { y: toY(p), label: fmtN(Math.round(p)) };
   });
 
   const liveColor = curPrice >= startPrice ? G.red : G.blue;
 
   return (
-    <svg
-      width="100%"
-      viewBox={`-56 -16 ${W + 68} ${H + 36}`}
-      style={{ overflow: "visible", display: "block" }}
-    >
+    <svg width="100%" viewBox={`-56 -12 ${W + 68} ${H + 32}`}
+      style={{ overflow: "visible", display: "block" }}>
+
       {/* 배경 그리드 */}
       {grids.map((g, i) => (
         <g key={i}>
@@ -671,12 +679,19 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
         const bTop = toY(Math.max(c.open, c.close));
         const bBot = toY(Math.min(c.open, c.close));
         const bH = Math.max(bBot - bTop, 2);
+        const wickTop = toY(c.high);
+        const wickBot = toY(c.low);
         return (
           <g key={`p${i}`}>
-            <line x1={x} y1={toY(c.high)} x2={x} y2={bTop} stroke={color} strokeWidth="1.2" />
-            <line x1={x} y1={bBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth="1.2" />
+            {/* 위 꼬리 */}
+            <line x1={x} y1={wickTop} x2={x} y2={bTop}
+              stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+            {/* 아래 꼬리 */}
+            <line x1={x} y1={bBot} x2={x} y2={wickBot}
+              stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+            {/* 몸통 */}
             <rect x={x - bodyW / 2} y={bTop} width={bodyW} height={bH}
-              fill={isUp ? color : "none"} stroke={color} strokeWidth="1.5" rx={1} />
+              fill={isUp ? color : "none"} stroke={color} strokeWidth="1.5" rx={1.5} />
             <text x={x} y={H + 14} textAnchor="middle" fontSize="9"
               fill={G.gray1} fontFamily="inherit">{c.label}</text>
           </g>
@@ -686,12 +701,11 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
       {/* 이전/현재 구분선 */}
       {prevCandles.length > 0 && (
         <line
-          x1={slotW * prevCandles.length + slotW * 0.1}
+          x1={slotW * prevCandles.length + 2}
           y1={-8}
-          x2={slotW * prevCandles.length + slotW * 0.1}
+          x2={slotW * prevCandles.length + 2}
           y2={H + 2}
-          stroke={G.border} strokeWidth="1" strokeDasharray="3,2"
-        />
+          stroke={G.border} strokeWidth="0.8" strokeDasharray="3,2" />
       )}
 
       {/* 현재 라운드 캔들 */}
@@ -703,18 +717,28 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
         const bTop = toY(Math.max(c.open, c.close));
         const bBot = toY(Math.min(c.open, c.close));
         const bH = Math.max(bBot - bTop, 2);
+        const wickTop = toY(c.high);
+        const wickBot = toY(c.low);
         return (
           <g key={`l${i}`}>
-            <line x1={x} y1={toY(c.high)} x2={x} y2={bTop}
-              stroke={color} strokeWidth={c.isLast ? 1.8 : 1.2} />
-            <line x1={x} y1={bBot} x2={x} y2={toY(c.low)}
-              stroke={color} strokeWidth={c.isLast ? 1.8 : 1.2} />
+            {/* 위 꼬리 */}
+            <line x1={x} y1={wickTop} x2={x} y2={bTop}
+              stroke={color}
+              strokeWidth={c.isLast ? 2 : 1.5}
+              strokeLinecap="round" />
+            {/* 아래 꼬리 */}
+            <line x1={x} y1={bBot} x2={x} y2={wickBot}
+              stroke={color}
+              strokeWidth={c.isLast ? 2 : 1.5}
+              strokeLinecap="round" />
+            {/* 몸통 */}
             <rect
-              x={x - bodyW / 2} y={bTop} width={bodyW} height={bH}
+              x={x - bodyW / 2} y={bTop}
+              width={bodyW} height={bH}
               fill={isUp ? color : "none"}
               stroke={color}
-              strokeWidth={c.isLast ? 2.2 : 1.5}
-              rx={1}
+              strokeWidth={c.isLast ? 2.2 : 1.8}
+              rx={1.5}
               opacity={c.isLast ? 1 : 0.85}
             />
           </g>
@@ -726,10 +750,11 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
         x={slotW * (prevCandles.length + liveCandles.length / 2)}
         y={H + 14}
         textAnchor="middle" fontSize="9.5"
-        fill={liveColor} fontFamily="inherit" fontWeight="700"
-      >R{round}</text>
+        fill={liveColor} fontFamily="inherit" fontWeight="700">
+        R{round}
+      </text>
 
-      {/* 현재가 점선 + 우측 라벨 */}
+      {/* 현재가 점선 + 라벨 */}
       {(() => {
         const y = toY(curPrice);
         return (
@@ -739,8 +764,8 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
               strokeDasharray="4,3" opacity="0.7" />
             <rect x={W + 2} y={y - 9} width={56} height={18}
               fill={liveColor} rx={3} />
-            <text x={W + 30} y={y + 4} textAnchor="middle" fontSize="9.5"
-              fill="white" fontFamily="monospace" fontWeight="700">
+            <text x={W + 30} y={y + 4} textAnchor="middle"
+              fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="700">
               {fmtN(curPrice)}
             </text>
           </>
@@ -753,8 +778,10 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
         const x = slotW * xIdx + slotW / 2;
         const y = toY(curPrice);
         return (
-          <circle cx={x} cy={y} r="3.5" fill={liveColor} stroke="white" strokeWidth="1.5">
-            <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite" />
+          <circle cx={x} cy={y} r="3.5"
+            fill={liveColor} stroke="white" strokeWidth="1.5">
+            <animate attributeName="opacity"
+              values="1;0.2;1" dur="1s" repeatCount="indefinite" />
           </circle>
         );
       })()}
