@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "./firebase";
 import { ref, onValue, set as fbSet, get } from "firebase/database";
 
@@ -552,11 +552,180 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, priceHistory }) {
   const [, tick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => tick(t => t + 1), 800);
+    const id = setInterval(() => tick(t => t + 1), 600);
     return () => clearInterval(id);
   }, []);
 
-  if (!stock) return null;
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+
+    if (blind) {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = '#F2F4F6';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = '#8B95A1';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🙈 블라인드 라운드 — 가격 숨김', cv.width / 2, cv.height / 2);
+      return;
+    }
+
+    if (!stock) return;
+
+    const ri = Math.min(round - 1, stock.prices.length - 1);
+    const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
+    const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+
+    // 이전 라운드 캔들
+    const prevCandles = [];
+    for (let i = 0; i < ri; i++) {
+      const o = i === 0 ? stock.prices[0] : stock.prices[i - 1];
+      const c = stock.prices[i];
+      const spread = Math.abs(c - o) * 0.25 + Math.min(o, c) * 0.012;
+      prevCandles.push({ o, c, h: Math.max(o, c) + spread, l: Math.min(o, c) - spread });
+    }
+
+    // 현재 라운드 히스토리
+    const rawHistory = priceHistory?.[stock.id];
+    const history = Array.isArray(rawHistory)
+      ? rawHistory.filter(p => roundStartedAt && p.t >= roundStartedAt)
+      : [];
+
+    const allPts = history.map(p => p.price);
+    if (allPts.length === 0) allPts.push(startPrice);
+    if (allPts[allPts.length - 1] !== curPrice) allPts.push(curPrice);
+
+    // 캔들 집계 — 최소 8개
+    const TARGET = Math.max(8, Math.min(28, Math.floor(allPts.length / 2)));
+    const segSize = Math.max(1, Math.floor(allPts.length / TARGET));
+    const liveCandles = [];
+    for (let i = 0; i < allPts.length; i += segSize) {
+      const seg = allPts.slice(i, Math.min(i + segSize, allPts.length));
+      if (!seg.length) continue;
+      const isLast = i + segSize >= allPts.length;
+      const o = seg[0];
+      const c = isLast ? curPrice : seg[seg.length - 1];
+      let h = Math.max(...seg);
+      let l = Math.min(...seg);
+      const body = Math.abs(c - o);
+      const minTail = Math.max(body * 0.35, c * 0.005);
+      h = (isLast ? Math.max(h, curPrice) : h) + minTail;
+      l = (isLast ? Math.min(l, curPrice) : l) - minTail;
+      liveCandles.push({ o, c, h, l, isLast });
+    }
+    if (!liveCandles.length) {
+      liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice) * 1.008, l: Math.min(startPrice, curPrice) * 0.992, isLast: true });
+    }
+
+    const all = [...prevCandles, ...liveCandles];
+
+    // Y 범위
+    const allP = all.flatMap(c => [c.h, c.l]);
+    const dMin = Math.min(...allP), dMax = Math.max(...allP);
+    const pad = Math.max((dMax - dMin) * 0.1, dMin * 0.005);
+    const minP = dMin - pad, maxP = dMax + pad, range = maxP - minP || 1;
+
+    const W = cv.width, H = cv.height;
+    const PAD = { t: 16, r: 70, b: 20, l: 4 };
+    const cw = W - PAD.l - PAD.r;
+    const ch = H - PAD.t - PAD.b;
+    const toY = v => PAD.t + ch - ((v - minP) / range) * ch;
+
+    const UP = '#F04452', DN = '#3182F6';
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+
+    // 그리드
+    for (let i = 0; i <= 4; i++) {
+      const v = minP + (range / 4) * i;
+      const y = toY(v);
+      ctx.strokeStyle = '#F2F4F6'; ctx.lineWidth = 0.6;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(W - PAD.r, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#B0B8C1'; ctx.font = '9px monospace'; ctx.textAlign = 'right';
+      ctx.fillText(Math.round(v).toLocaleString(), W - 4, y + 3);
+    }
+
+    // 구분선
+    if (prevCandles.length > 0) {
+      const divX = PAD.l + (prevCandles.length / all.length) * cw;
+      ctx.strokeStyle = '#E5E8EB'; ctx.lineWidth = 0.8;
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath(); ctx.moveTo(divX, PAD.t); ctx.lineTo(divX, PAD.t + ch); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 캔들
+    const slotW = cw / Math.max(all.length, 1);
+    const bw = Math.max(4, Math.min(18, slotW * 0.68));
+
+    all.forEach((c, i) => {
+      const x = PAD.l + slotW * i + slotW / 2;
+      const isUp = c.c >= c.o;
+      const col = isUp ? UP : DN;
+      const bTop = toY(Math.max(c.o, c.c));
+      const bBot = toY(Math.min(c.o, c.c));
+      const bH = Math.max(bBot - bTop, 2);
+      const wTop = toY(c.h), wBot = toY(c.l);
+      const lw = (c.isLast) ? 2.2 : 1.6;
+
+      ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, wTop); ctx.lineTo(x, bTop); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, bBot); ctx.lineTo(x, wBot); ctx.stroke();
+
+      ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = lw;
+      ctx.beginPath();
+      if (ctx.roundRect) { ctx.roundRect(x - bw / 2, bTop, bw, bH, 1.5); }
+      else { ctx.rect(x - bw / 2, bTop, bw, bH); }
+      ctx.fill(); ctx.stroke();
+    });
+
+    // 현재가 점선
+    const curY = toY(curPrice);
+    const isUp = curPrice >= startPrice;
+    const lc = isUp ? UP : DN;
+    ctx.strokeStyle = lc; ctx.lineWidth = 0.9;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(PAD.l, curY); ctx.lineTo(W - PAD.r, curY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 라벨
+    const lx = W - PAD.r + 2, lw2 = 64, lh2 = 18;
+    ctx.fillStyle = lc;
+    ctx.beginPath();
+    if (ctx.roundRect) { ctx.roundRect(lx, curY - lh2 / 2, lw2, lh2, 3); }
+    else { ctx.rect(lx, curY - lh2 / 2, lw2, lh2); }
+    ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(Math.round(curPrice).toLocaleString(), lx + lw2 / 2, curY + 4);
+
+    // 라운드 레이블
+    const liveStart = prevCandles.length;
+    const liveMidX = PAD.l + (liveStart + liveCandles.length / 2) * slotW;
+    ctx.fillStyle = lc; ctx.font = 'bold 9.5px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`R${round}`, liveMidX, H - 4);
+
+    if (prevCandles.length > 0) {
+      const prevMidX = PAD.l + (prevCandles.length / 2) * slotW;
+      ctx.fillStyle = '#8B95A1'; ctx.font = '9px sans-serif';
+      ctx.fillText(`R${round - 1}`, prevMidX, H - 4);
+    }
+
+    // 깜빡 점
+    const lastX = PAD.l + (all.length - 1) * slotW + slotW / 2;
+    const alpha = 0.4 + 0.6 * Math.abs(Math.sin(tick * 0.2));
+    ctx.fillStyle = lc; ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.arc(lastX, curY, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+  }, [tick, stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, priceHistory]);
 
   if (blind) return (
     <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: G.bg, borderRadius: 12 }}>
@@ -566,253 +735,94 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
     </div>
   );
 
-  const ri = Math.min(round - 1, stock.prices.length - 1);
-  const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
-  const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
-
-  // ── 이전 라운드 캔들 (확정) ──
-  const prevCandles = [];
-  for (let i = 0; i < ri; i++) {
-    const o = i === 0 ? stock.prices[0] : stock.prices[i - 1];
-    const c = stock.prices[i];
-    const spread = Math.abs(c - o) * 0.25 + Math.min(o, c) * 0.012;
-    prevCandles.push({
-      open: o, close: c,
-      high: Math.max(o, c) + spread,
-      low: Math.min(o, c) - spread,
-      label: `R${i + 1}`,
-    });
-  }
-
-  // ── 현재 라운드 히스토리 → 캔들 집계 ──
-  const rawHistory = priceHistory?.[stock.id];
-  const history = Array.isArray(rawHistory)
-    ? rawHistory.filter(p => roundStartedAt && p.t >= roundStartedAt)
-    : [];
-
-  const allPts = history.map(p => p.price);
-  if (allPts.length === 0) allPts.push(startPrice);
-  if (allPts[allPts.length - 1] !== curPrice) allPts.push(curPrice);
-
-  // 캔들 집계 — 최소 8개 목표
-  const TARGET = Math.max(8, Math.min(30, Math.floor(allPts.length / 3)));
-  const segSize = Math.max(1, Math.floor(allPts.length / TARGET));
-  const liveCandles = [];
-
-  for (let i = 0; i < allPts.length; i += segSize) {
-    const seg = allPts.slice(i, Math.min(i + segSize, allPts.length));
-    if (seg.length === 0) continue;
-    const isLast = i + segSize >= allPts.length;
-    const open = seg[0];
-    const close = isLast ? curPrice : seg[seg.length - 1];
-    const rawHigh = Math.max(...seg);
-    const rawLow = Math.min(...seg);
-    // 꼬리 강제 추가 (최소 몸통의 30%)
-    const body = Math.abs(close - open);
-    const minTail = Math.max(body * 0.3, close * 0.004);
-    liveCandles.push({
-      open,
-      close,
-      high: rawHigh + minTail,
-      low: rawLow - minTail,
-      isLast,
-    });
-  }
-
-  if (liveCandles.length === 0) {
-    liveCandles.push({
-      open: startPrice, close: curPrice,
-      high: Math.max(startPrice, curPrice) * 1.008,
-      low: Math.min(startPrice, curPrice) * 0.992,
-      isLast: true,
-    });
-  }
-
-  // ── Y축: 현재 라운드 가격 기준으로 타이트하게 ──
-  const allForRange = [
-    ...prevCandles.flatMap(c => [c.high, c.low]),
-    ...liveCandles.flatMap(c => [c.high, c.low]),
-  ];
-  const dataMin = Math.min(...allForRange);
-  const dataMax = Math.max(...allForRange);
-  // 타이트한 패딩 (5%)
-  const pad = (dataMax - dataMin) * 0.12 + dataMin * 0.005;
-  const minP = dataMin - pad;
-  const maxP = dataMax + pad;
-  const range = maxP - minP || 1;
-
-  const W = 300, H = 150;
-  const toY = p => Math.max(1, Math.min(H - 1, H - ((p - minP) / range) * H));
-
-  // ── 레이아웃 ──
-  const totalSlots = prevCandles.length + liveCandles.length + 1;
-  const slotW = W / Math.max(totalSlots, 6);
-  const bodyW = Math.max(5, Math.min(20, slotW * 0.6));
-
-  // 눈금 4개
-  const grids = Array.from({ length: 4 }, (_, i) => {
-    const p = minP + (range / 3) * i;
-    return { y: toY(p), label: fmtN(Math.round(p)) };
-  });
-
-  const liveColor = curPrice >= startPrice ? G.red : G.blue;
-
   return (
-    <svg width="100%" viewBox={`-56 -12 ${W + 68} ${H + 32}`}
-      style={{ overflow: "visible", display: "block" }}>
-
-      {/* 배경 그리드 */}
-      {grids.map((g, i) => (
-        <g key={i}>
-          <line x1={0} y1={g.y} x2={W} y2={g.y}
-            stroke="#E5E8EB" strokeWidth="0.6" strokeDasharray="3,4" />
-          <text x={-4} y={g.y + 3} textAnchor="end" fontSize="8"
-            fill="#B0B8C1" fontFamily="monospace">{g.label}</text>
-        </g>
-      ))}
-
-      {/* 이전 라운드 캔들 */}
-      {prevCandles.map((c, i) => {
-        const x = slotW * i + slotW / 2;
-        const isUp = c.close >= c.open;
-        const color = isUp ? G.red : G.blue;
-        const bTop = toY(Math.max(c.open, c.close));
-        const bBot = toY(Math.min(c.open, c.close));
-        const bH = Math.max(bBot - bTop, 2);
-        const wickTop = toY(c.high);
-        const wickBot = toY(c.low);
-        return (
-          <g key={`p${i}`}>
-            {/* 위 꼬리 */}
-            <line x1={x} y1={wickTop} x2={x} y2={bTop}
-              stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-            {/* 아래 꼬리 */}
-            <line x1={x} y1={bBot} x2={x} y2={wickBot}
-              stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-            {/* 몸통 */}
-            <rect x={x - bodyW / 2} y={bTop} width={bodyW} height={bH}
-              fill={isUp ? color : "none"} stroke={color} strokeWidth="1.5" rx={1.5} />
-            <text x={x} y={H + 14} textAnchor="middle" fontSize="9"
-              fill={G.gray1} fontFamily="inherit">{c.label}</text>
-          </g>
-        );
-      })}
-
-      {/* 이전/현재 구분선 */}
-      {prevCandles.length > 0 && (
-        <line
-          x1={slotW * prevCandles.length + 2}
-          y1={-8}
-          x2={slotW * prevCandles.length + 2}
-          y2={H + 2}
-          stroke={G.border} strokeWidth="0.8" strokeDasharray="3,2" />
-      )}
-
-      {/* 현재 라운드 캔들 */}
-      {liveCandles.map((c, i) => {
-        const xIdx = prevCandles.length + i;
-        const x = slotW * xIdx + slotW / 2;
-        const isUp = c.close >= c.open;
-        const color = isUp ? G.red : G.blue;
-        const bTop = toY(Math.max(c.open, c.close));
-        const bBot = toY(Math.min(c.open, c.close));
-        const bH = Math.max(bBot - bTop, 2);
-        const wickTop = toY(c.high);
-        const wickBot = toY(c.low);
-        return (
-          <g key={`l${i}`}>
-            {/* 위 꼬리 */}
-            <line x1={x} y1={wickTop} x2={x} y2={bTop}
-              stroke={color}
-              strokeWidth={c.isLast ? 2 : 1.5}
-              strokeLinecap="round" />
-            {/* 아래 꼬리 */}
-            <line x1={x} y1={bBot} x2={x} y2={wickBot}
-              stroke={color}
-              strokeWidth={c.isLast ? 2 : 1.5}
-              strokeLinecap="round" />
-            {/* 몸통 */}
-            <rect
-              x={x - bodyW / 2} y={bTop}
-              width={bodyW} height={bH}
-              fill={isUp ? color : "none"}
-              stroke={color}
-              strokeWidth={c.isLast ? 2.2 : 1.8}
-              rx={1.5}
-              opacity={c.isLast ? 1 : 0.85}
-            />
-          </g>
-        );
-      })}
-
-      {/* 현재 라운드 레이블 */}
-      <text
-        x={slotW * (prevCandles.length + liveCandles.length / 2)}
-        y={H + 14}
-        textAnchor="middle" fontSize="9.5"
-        fill={liveColor} fontFamily="inherit" fontWeight="700">
-        R{round}
-      </text>
-
-      {/* 현재가 점선 + 라벨 */}
-      {(() => {
-        const y = toY(curPrice);
-        return (
-          <>
-            <line x1={0} y1={y} x2={W} y2={y}
-              stroke={liveColor} strokeWidth="0.8"
-              strokeDasharray="4,3" opacity="0.7" />
-            <rect x={W + 2} y={y - 9} width={56} height={18}
-              fill={liveColor} rx={3} />
-            <text x={W + 30} y={y + 4} textAnchor="middle"
-              fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="700">
-              {fmtN(curPrice)}
-            </text>
-          </>
-        );
-      })()}
-
-      {/* 마지막 캔들 깜빡이는 점 */}
-      {(() => {
-        const xIdx = prevCandles.length + liveCandles.length - 1;
-        const x = slotW * xIdx + slotW / 2;
-        const y = toY(curPrice);
-        return (
-          <circle cx={x} cy={y} r="3.5"
-            fill={liveColor} stroke="white" strokeWidth="1.5">
-            <animate attributeName="opacity"
-              values="1;0.2;1" dur="1s" repeatCount="indefinite" />
-          </circle>
-        );
-      })()}
-    </svg>
+    <canvas
+      ref={canvasRef}
+      width={560}
+      height={200}
+      style={{ width: "100%", height: "auto", display: "block" }}
+    />
   );
 }
 
-function LiveMiniChart({stock,round,roundStartedAt,roundEndsAt,activeEvent,modifiedTargets,blind}){
-  const [,tick]=useState(0);
-  useEffect(()=>{const id=setInterval(()=>tick(t=>t+1),2000);return()=>clearInterval(id);},[]);
-  if(blind) return <div style={{width:52,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🙈</div>;
-  if(!stock||stock.prices.length<1) return <div style={{width:52,height:28}}/>;
-  const ri=Math.min(round-1,stock.prices.length-1);
-  const cur=getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent,modifiedTargets);
-  const pts2=[...stock.prices.slice(0,ri),cur];
-  if(pts2.length<2) return <div style={{width:52,height:28}}/>;
-  const mn=Math.min(...pts2),mx=Math.max(...pts2),r=mx-mn||1,W=52,H=28;
-  const pts=pts2.map((p,i)=>`${(i/(pts2.length-1))*W},${H-((p-mn)/r)*H}`).join(" ");
-  const color=cur>=pts2[0]?G.red:G.blue;
-  return(
-    <svg width={W} height={H} style={{display:"block",flexShrink:0}}>
-      <defs><linearGradient id={`mg${stock.id}`} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor={color} stopOpacity="0.3"/>
-        <stop offset="100%" stopColor={color} stopOpacity="0"/>
-      </linearGradient></defs>
-      <polyline points={pts+` ${W},${H} 0,${H}`} fill={`url(#mg${stock.id})`} stroke="none"/>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx={W} cy={H-((cur-mn)/r)*H} r="2.5" fill={color}>
-        <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite"/>
-      </circle>
-    </svg>
+function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv || !stock) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+
+    ctx.clearRect(0, 0, W, H);
+
+    if (blind) {
+      ctx.fillStyle = '#8B95A1';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🙈', W / 2, H / 2 + 5);
+      return;
+    }
+
+    const ri = Math.min(round - 1, stock.prices.length - 1);
+    const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
+    const startP = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+    const pts = [...stock.prices.slice(0, ri), cur];
+    if (pts.length < 2) { pts.unshift(startP); }
+
+    const mn = Math.min(...pts), mx = Math.max(...pts);
+    const rng = mx - mn || pts[0] * 0.02;
+    const pad = rng * 0.15;
+    const minP = mn - pad, maxP = mx + pad, range = maxP - minP || 1;
+    const toY = v => H - ((v - minP) / range) * H;
+
+    const isUp = cur >= pts[0];
+    const color = isUp ? '#F04452' : '#3182F6';
+
+    // 면적 그라데이션
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, isUp ? 'rgba(240,68,82,0.25)' : 'rgba(49,130,246,0.25)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+
+    const coords = pts.map((p, i) => ({
+      x: (i / (pts.length - 1)) * W,
+      y: toY(p),
+    }));
+
+    ctx.beginPath();
+    ctx.moveTo(coords[0].x, coords[0].y);
+    coords.slice(1).forEach(c => ctx.lineTo(c.x, c.y));
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(coords[0].x, coords[0].y);
+    coords.slice(1).forEach(c => ctx.lineTo(c.x, c.y));
+    ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // 끝점 깜빡
+    const last = coords[coords.length - 1];
+    const alpha = 0.4 + 0.6 * Math.abs(Math.sin(tick * 0.25));
+    ctx.fillStyle = color; ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.arc(last.x, last.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+  }, [tick, stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={104}
+      height={48}
+      style={{ width: 52, height: 24, display: "block", flexShrink: 0 }}
+    />
   );
 }
 
