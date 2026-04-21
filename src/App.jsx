@@ -352,7 +352,7 @@ function useAutoEventAndHistory(shared) {
       // 1. 가격 히스토리 기록 (10초마다)
       if (!shared.roundStartedAt) return;
       const elapsed = now - shared.roundStartedAt;
-      if (elapsed % 10000 < 1500) {
+      if (elapsed % 2000 < 600) {
         const newHistory = { ...(shared.priceHistory || {}) };
         (shared.stocks || []).forEach(stock => {
           const price = getCurrentPrice(
@@ -362,7 +362,7 @@ function useAutoEventAndHistory(shared) {
           );
           if (!newHistory[stock.id]) newHistory[stock.id] = [];
           newHistory[stock.id] = [
-            ...newHistory[stock.id].slice(-60),
+            ...newHistory[stock.id].slice(-300),
             { t: now, price }
           ];
         });
@@ -551,123 +551,164 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
   );
 
   const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
+  const ri = Math.min(round - 1, stock.prices.length - 1);
 
-  const candles = [];
-  for (let i = 0; i < Math.min(round - 1, stock.prices.length - 1); i++) {
+  // ── 캔들 생성 ──
+  // 1. 이전 라운드: 라운드당 캔들 1개 (확정)
+  const prevCandles = [];
+  for (let i = 0; i < ri; i++) {
     const open = i === 0 ? stock.prices[0] : stock.prices[i - 1];
     const close = stock.prices[i];
-    candles.push({ open, close, high: Math.max(open, close) * 1.02, low: Math.min(open, close) * 0.98, label: `R${i + 1}`, type: "candle" });
+    prevCandles.push({
+      open, close,
+      high: Math.max(open, close) * (1 + 0.015 + Math.random() * 0.01),
+      low: Math.min(open, close) * (1 - 0.015 - Math.random() * 0.01),
+      label: `R${i + 1}`,
+    });
   }
 
-  const history = (priceHistory?.[stock.id] || []).filter(p => roundStartedAt && p.t >= roundStartedAt);
-  const livePts = history.map(p => p.price);
-  if (livePts.length === 0 || livePts[livePts.length - 1] !== curPrice) livePts.push(curPrice);
+  // 2. 현재 라운드: 히스토리 기반 다수 캔들
+  const history = (priceHistory?.[stock.id] || []).filter(p =>
+    roundStartedAt && p.t >= roundStartedAt
+  );
+  // 현재가 항상 마지막에 추가
+  const allPts = [...history.map(p => p.price)];
+  if (allPts.length === 0 || allPts[allPts.length - 1] !== curPrice) allPts.push(curPrice);
 
-  const allPrices = [...candles.flatMap(c => [c.high, c.low]), ...livePts];
-  if (allPrices.length === 0) return null;
+  // 히스토리를 N개 캔들로 집계
+  const TARGET_CANDLES = 20; // 현재 라운드 캔들 수
+  const segSize = Math.max(1, Math.floor(allPts.length / TARGET_CANDLES));
+  const liveCandles = [];
+  for (let i = 0; i < allPts.length; i += segSize) {
+    const seg = allPts.slice(i, Math.min(i + segSize, allPts.length));
+    if (seg.length === 0) continue;
+    const open = seg[0];
+    const close = i + segSize >= allPts.length ? curPrice : seg[seg.length - 1];
+    const high = Math.max(...seg) * (1 + 0.003);
+    const low = Math.min(...seg) * (1 - 0.003);
+    liveCandles.push({ open, close, high, low, isLast: i + segSize >= allPts.length });
+  }
+  if (liveCandles.length === 0) {
+    const open = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+    liveCandles.push({ open, close: curPrice, high: Math.max(open, curPrice) * 1.005, low: Math.min(open, curPrice) * 0.995, isLast: true });
+  }
 
-  const minP = Math.min(...allPrices) * 0.96;
-  const maxP = Math.max(...allPrices) * 1.04;
+  // ── 전체 가격 범위 ──
+  const allPrices = [
+    ...prevCandles.flatMap(c => [c.high, c.low]),
+    ...liveCandles.flatMap(c => [c.high, c.low]),
+  ];
+  const minP = Math.min(...allPrices) * 0.97;
+  const maxP = Math.max(...allPrices) * 1.03;
   const range = maxP - minP || 1;
 
-  const W = 280, H = 120;
+  const W = 300, H = 130;
   const toY = p => H - ((p - minP) / range) * H;
 
-  const candleAreaW = candles.length > 0 ? W * 0.45 : 0;
-  const liveAreaW = W - candleAreaW;
-  const candleGap = candles.length > 0 ? candleAreaW / candles.length : 0;
-  const cw = Math.min(24, candleGap * 0.6);
+  // ── 레이아웃 ──
+  const totalCandles = prevCandles.length + liveCandles.length;
+  const candleSlotW = W / Math.max(totalCandles + 1, 8);
+  const bodyW = Math.max(4, Math.min(16, candleSlotW * 0.6));
 
-  const grids = Array.from({ length: 4 }, (_, i) => {
-    const p = minP + (range / 3) * i;
+  // 가격 눈금 5개
+  const grids = Array.from({ length: 5 }, (_, i) => {
+    const p = minP + (range / 4) * i;
     return { y: toY(p), label: fmtN(Math.round(p)) };
   });
 
-  const liveStartX = candleAreaW;
-  const livePtCoords = livePts.map((p, i) => ({
-    x: liveStartX + (livePts.length === 1 ? liveAreaW / 2 : (i / (livePts.length - 1)) * liveAreaW),
-    y: toY(p),
-  }));
-  const liveD = livePtCoords.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-  const liveFill = liveD + ` L${livePtCoords[livePtCoords.length - 1].x},${H} L${liveStartX},${H} Z`;
-  const isUp = livePts[livePts.length - 1] >= livePts[0];
-  const lc = isUp ? G.red : G.blue;
-
-  const segSize = Math.max(1, Math.floor(livePts.length / 5));
-  const liveCandles = [];
-  for (let i = 0; i < livePts.length; i += segSize) {
-    const seg = livePts.slice(i, i + segSize);
-    if (seg.length === 0) continue;
-    const open = seg[0], close = seg[seg.length - 1];
-    const high = Math.max(...seg), low = Math.min(...seg);
-    liveCandles.push({ open, close, high, low, live: true });
-  }
-  if (liveCandles.length > 0) {
-    liveCandles[liveCandles.length - 1].close = curPrice;
-  }
-  const liveCandleW = liveAreaW / Math.max(liveCandles.length, 1);
-  const liveCandleBodyW = Math.min(20, liveCandleW * 0.55);
+  // 현재가 색상
+  const firstOpen = liveCandles[0]?.open ?? curPrice;
+  const liveColor = curPrice >= firstOpen ? G.red : G.blue;
 
   return (
-    <svg width="100%" viewBox={`-48 -24 ${W + 60} ${H + 44}`} style={{ overflow: "visible", display: "block" }}>
+    <svg width="100%" viewBox={`-52 -20 ${W + 64} ${H + 40}`} style={{ overflow: "visible", display: "block" }}>
+      {/* 배경 그리드 */}
       {grids.map((g, i) => (
         <g key={i}>
-          <line x1={0} y1={g.y} x2={W} y2={g.y} stroke="#E5E8EB" strokeWidth="0.8" strokeDasharray="4,3" />
-          <text x={-4} y={g.y + 3} textAnchor="end" fontSize="8" fill="#B0B8C1" fontFamily="monospace">{g.label}</text>
+          <line x1={0} y1={g.y} x2={W} y2={g.y} stroke={G.border} strokeWidth="0.7" strokeDasharray="3,3" />
+          <text x={-4} y={g.y + 3} textAnchor="end" fontSize="8.5" fill={G.gray2} fontFamily="monospace">{g.label}</text>
         </g>
       ))}
-      {candles.map((c, i) => {
-        const x = candleGap * i + candleGap / 2;
-        const isUp2 = c.close >= c.open;
-        const color = isUp2 ? G.red : G.blue;
+
+      {/* 이전 라운드 캔들 */}
+      {prevCandles.map((c, i) => {
+        const x = candleSlotW * i + candleSlotW / 2;
+        const isUp = c.close >= c.open;
+        const color = isUp ? G.red : G.blue;
         const bodyTop = toY(Math.max(c.open, c.close));
         const bodyBot = toY(Math.min(c.open, c.close));
         const bodyH = Math.max(bodyBot - bodyTop, 2);
         return (
-          <g key={i}>
-            <line x1={x} y1={toY(c.high)} x2={x} y2={bodyTop} stroke={color} strokeWidth="1" />
-            <line x1={x} y1={bodyBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth="1" />
-            <rect x={x - cw / 2} y={bodyTop} width={cw} height={bodyH}
-              fill={isUp2 ? color : "none"} stroke={color} strokeWidth="1.5" rx={1} opacity={0.75} />
+          <g key={`p${i}`}>
+            <line x1={x} y1={toY(c.high)} x2={x} y2={bodyTop} stroke={color} strokeWidth="1.2" />
+            <line x1={x} y1={bodyBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth="1.2" />
+            <rect x={x - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH}
+              fill={isUp ? color : "none"} stroke={color} strokeWidth="1.5" rx={1} />
             <text x={x} y={H + 14} textAnchor="middle" fontSize="9" fill={G.gray1} fontFamily="inherit">{c.label}</text>
           </g>
         );
       })}
-      {candles.length > 0 && (
-        <line x1={candleAreaW} y1={-10} x2={candleAreaW} y2={H + 4} stroke={G.border} strokeWidth="1" strokeDasharray="3,2" />
+
+      {/* 구분선 */}
+      {prevCandles.length > 0 && (
+        <line
+          x1={candleSlotW * prevCandles.length}
+          y1={-12} x2={candleSlotW * prevCandles.length} y2={H + 4}
+          stroke={G.border} strokeWidth="1" strokeDasharray="3,2" />
       )}
+
+      {/* 현재 라운드 캔들 */}
       {liveCandles.map((c, i) => {
-        const x = liveStartX + liveCandleW * i + liveCandleW / 2;
-        const isUp2 = c.close >= c.open;
-        const color = isUp2 ? G.red : G.blue;
+        const xIdx = prevCandles.length + i;
+        const x = candleSlotW * xIdx + candleSlotW / 2;
+        const isUp = c.close >= c.open;
+        const color = isUp ? G.red : G.blue;
         const bodyTop = toY(Math.max(c.open, c.close));
         const bodyBot = toY(Math.min(c.open, c.close));
         const bodyH = Math.max(bodyBot - bodyTop, 2);
         return (
-          <g key={`live-${i}`}>
-            <line x1={x} y1={toY(c.high)} x2={x} y2={bodyTop} stroke={color} strokeWidth={c.live ? 1.5 : 1}/>
-            <line x1={x} y1={bodyBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth={c.live ? 1.5 : 1}/>
-            <rect x={x - liveCandleBodyW / 2} y={bodyTop} width={liveCandleBodyW} height={bodyH}
-              fill={isUp2 ? color : "none"} stroke={color} strokeWidth={c.live ? 2 : 1.5} rx={2}
-              opacity={i === liveCandles.length - 1 ? 1 : 0.7}/>
+          <g key={`l${i}`}>
+            <line x1={x} y1={toY(c.high)} x2={x} y2={bodyTop} stroke={color} strokeWidth={c.isLast ? 1.8 : 1.2} />
+            <line x1={x} y1={bodyBot} x2={x} y2={toY(c.low)} stroke={color} strokeWidth={c.isLast ? 1.8 : 1.2} />
+            <rect x={x - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH}
+              fill={isUp ? color : "none"} stroke={color}
+              strokeWidth={c.isLast ? 2.2 : 1.5} rx={1}
+              opacity={c.isLast ? 1 : 0.8} />
           </g>
         );
       })}
-      {livePtCoords.length > 0 && (() => {
-        const last = livePtCoords[livePtCoords.length - 1];
+
+      {/* 현재 라운드 레이블 */}
+      <text
+        x={candleSlotW * (prevCandles.length + liveCandles.length / 2)}
+        y={H + 14} textAnchor="middle" fontSize="9.5"
+        fill={liveColor} fontFamily="inherit" fontWeight="700">R{round}</text>
+
+      {/* 현재가 점선 + 라벨 */}
+      {(() => {
+        const y = toY(curPrice);
         return (
           <>
-            <line x1={0} y1={last.y} x2={W} y2={last.y} stroke={lc} strokeWidth="0.8" strokeDasharray="3,2" opacity="0.5" />
-            <rect x={W + 2} y={last.y - 8} width={52} height={16} fill={lc} rx={3} />
-            <text x={W + 28} y={last.y + 4} textAnchor="middle" fontSize="9" fill="white" fontFamily="monospace" fontWeight="700">{fmtN(curPrice)}</text>
-            <circle cx={last.x} cy={last.y} r="4" fill={lc} stroke="white" strokeWidth="2">
-              <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" />
-            </circle>
+            <line x1={0} y1={y} x2={W} y2={y}
+              stroke={liveColor} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.7" />
+            <rect x={W + 2} y={y - 9} width={54} height={18} fill={liveColor} rx={3} />
+            <text x={W + 29} y={y + 4} textAnchor="middle" fontSize="9.5"
+              fill="white" fontFamily="monospace" fontWeight="700">{fmtN(curPrice)}</text>
           </>
         );
       })()}
-      <text x={liveStartX + liveAreaW / 2} y={H + 14} textAnchor="middle" fontSize="9.5"
-        fill={lc} fontFamily="inherit" fontWeight="700">R{round}</text>
+
+      {/* 마지막 캔들 깜빡이는 점 */}
+      {(() => {
+        const xIdx = prevCandles.length + liveCandles.length - 1;
+        const x = candleSlotW * xIdx + candleSlotW / 2;
+        const y = toY(curPrice);
+        return (
+          <circle cx={x} cy={y} r="3.5" fill={liveColor} stroke="white" strokeWidth="1.5">
+            <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite" />
+          </circle>
+        );
+      })()}
     </svg>
   );
 }
