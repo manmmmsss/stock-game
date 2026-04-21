@@ -1,3 +1,20 @@
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background: #F2F4F6;
+}
+body {
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+}
+input, button, select, textarea {
+  font-family: inherit;
+}
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;

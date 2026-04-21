@@ -161,7 +161,7 @@ function ConfirmModal({show,onConfirm,onCancel,side,stock,qty,price}){
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,
       display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onCancel}>
       <div onClick={e=>e.stopPropagation()} style={{background:G.white,borderRadius:"20px 20px 0 0",
-        padding:"24px 20px 40px",width:"100%",maxWidth:430,boxShadow:"0 -8px 32px rgba(0,0,0,.15)"}}>
+        padding:"24px 20px 40px",width:"100%",maxWidth:"100%",boxShadow:"0 -8px 32px rgba(0,0,0,.15)"}}>
         <div style={{width:36,height:4,background:G.border,borderRadius:2,margin:"0 auto 20px"}}/>
         <div style={{fontSize:18,fontWeight:800,color:G.black,marginBottom:4}}>{isBuy?"매수":"매도"} 주문 확인</div>
         <div style={{fontSize:14,color:G.gray1,marginBottom:18}}>아래 내용으로 주문하시겠어요?</div>
@@ -451,7 +451,7 @@ function AdminApp(){
   const TABS=[["control","진행"],["settings","설정"],["teams","팀 관리"],["accounts","계좌"],["rank","순위"]];
 
   return (
-    <div style={{background:G.bg,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
+    <div style={{background:G.bg,minHeight:"100vh",minHeightFallback:"100dvh",maxWidth:"430px",width:"100%",margin:"0 auto",overflowX:"hidden",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
       <div style={{background:G.white,padding:"14px 16px 0",borderBottom:`1px solid ${G.border}`,position:"sticky",top:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
           <div style={{background:G.black,color:G.white,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>ADMIN</div>
@@ -1000,7 +1000,7 @@ function UserApp(){
   };
 
   const total=totalAsset(),diff=total-initCash,diffPct=((diff/initCash)*100).toFixed(2);
-  const W={wrap:{background:G.bg,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}};
+  const W={wrap:{background:G.bg,minHeight:"100vh",minHeightFallback:"100dvh",maxWidth:"430px",width:"100%",margin:"0 auto",overflowX:"hidden",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}};
 
   /* ── 로그인 ── */
   if(screen==="login") return (
@@ -1245,7 +1245,7 @@ function UserApp(){
 function AdminLogin({onSuccess}){
   const [pw,setPw]=useState(""),[ err,setErr]=useState(false);
   const check=()=>{if(pw===ADMIN_PW)onSuccess();else setErr(true);};
-  return <div style={{background:G.white,minHeight:"100vh",maxWidth:430,margin:"0 auto",
+  return <div style={{background:G.white,minHeight:"100vh",minHeightFallback:"100dvh",maxWidth:"430px",width:"100%",margin:"0 auto",overflowX:"hidden",
     display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px",
     fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
     <div style={{fontSize:26,fontWeight:800,color:G.black,marginBottom:8}}>운영자 로그인 🔐</div>
@@ -1267,7 +1267,7 @@ export default function App(){
   const [auth,setAuth]=useState(false);
   if(mode==="admin"){if(!auth)return <AdminLogin onSuccess={()=>setAuth(true)}/>;return <AdminApp/>;}
   if(mode==="user") return <UserApp/>;
-  return <div style={{background:G.white,minHeight:"100vh",maxWidth:430,margin:"0 auto",
+  return <div style={{background:G.white,minHeight:"100vh",minHeightFallback:"100dvh",maxWidth:"430px",width:"100%",margin:"0 auto",overflowX:"hidden",
     display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px",
     fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
     <div style={{marginBottom:48}}>
