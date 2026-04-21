@@ -267,51 +267,163 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 );
 
 /* 실시간 미니차트 */
-function LiveMiniChart({stock,round,roundStartedAt,roundEndsAt,activeEvent}){
-  const [,tick]=useState(0);
-  useEffect(()=>{const id=setInterval(()=>tick(t=>t+1),2000);return()=>clearInterval(id);},[]);
-  if(!stock||stock.prices.length<1) return <div style={{width:52,height:24}}/>;
-  const ri=Math.min(round-1,stock.prices.length-1);
-  const prev=ri>0?stock.prices[ri-1]:stock.prices[0];
-  const cur=getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent);
-  const pts2=[...stock.prices.slice(0,ri),cur];
-  if(pts2.length<2) return <div style={{width:52,height:24}}/>;
-  const mn=Math.min(...pts2),mx=Math.max(...pts2),r=mx-mn||1,W=52,H=24;
-  const pts=pts2.map((p,i)=>`${(i/(pts2.length-1))*W},${H-((p-mn)/r)*H}`).join(" ");
-  return <svg width={W} height={H} style={{display:"block",flexShrink:0}}>
-    <polyline points={pts} fill="none" stroke={cur>=prev?G.red:G.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>;
+function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick(t => t + 1), 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!stock || stock.prices.length < 1) return <div style={{ width: 52, height: 28 }}/>;
+
+  const ri = Math.min(round - 1, stock.prices.length - 1);
+  const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent);
+  const pastPrices = stock.prices.slice(0, ri);
+  const allPts = [...pastPrices, cur];
+  if (allPts.length < 2) return <div style={{ width: 52, height: 28 }}/>;
+
+  const mn = Math.min(...allPts), mx = Math.max(...allPts), r = mx - mn || 1;
+  const W = 52, H = 28;
+  const pts = allPts.map((p, i) => `${(i / (allPts.length - 1)) * W},${H - ((p - mn) / r) * H}`).join(" ");
+  const firstP = allPts[0], color = cur >= firstP ? "#F04452" : "#3182F6";
+  const lastX = W, lastY = H - ((cur - mn) / r) * H;
+
+  return (
+    <svg width={W} height={H} style={{ display: "block", flexShrink: 0 }}>
+      <defs>
+        <linearGradient id={`mg${stock.id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <polyline points={pts + ` ${W},${H} 0,${H}`} fill={`url(#mg${stock.id})`} stroke="none"/>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={lastX} cy={lastY} r="2.5" fill={color}>
+        <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+  );
 }
 
-function LiveBigChart({stock,round,maxRound,roundStartedAt,roundEndsAt,activeEvent}){
-  const [,tick]=useState(0);
-  useEffect(()=>{const id=setInterval(()=>tick(t=>t+1),500);return()=>clearInterval(id);},[]);
-  if(!stock) return null;
-  const ri=Math.min(round-1,stock.prices.length-1);
-  const cur=getCurrentPrice(stock,round,roundStartedAt,roundEndsAt,activeEvent);
-  const points=[];
-  for(let i=0;i<ri;i++) points.push({label:`R${i+1}`,price:stock.prices[i],live:false});
-  points.push({label:`R${round}`,price:cur,live:true});
-  const prices=points.map(p=>p.price);
-  const mn=Math.min(...prices)*0.95,mx=Math.max(...prices)*1.05,rng=mx-mn||1,W=280,H=80;
-  const pts=points.map((p,i)=>({...p,x:points.length===1?W/2:(i/(points.length-1))*W,y:H-((p.price-mn)/rng)*H}));
-  const d=pts.map((p,i)=>`${i===0?"M":"L"}${p.x},${p.y}`).join(" ");
-  const fill=d+` L${pts[pts.length-1].x},${H} L${pts[0].x},${H} Z`;
-  const lc=cur>=(stock.prices[Math.max(ri-1,0)]||cur)?G.red:G.blue;
-  return <svg width="100%" viewBox={`-16 -28 ${W+32} ${H+40}`} style={{overflow:"visible",display:"block"}}>
-    <defs><linearGradient id={`gc${stock.id}`} x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stopColor={lc} stopOpacity="0.18"/>
-      <stop offset="100%" stopColor={lc} stopOpacity="0"/>
-    </linearGradient></defs>
-    <path d={fill} fill={`url(#gc${stock.id})`}/>
-    <path d={d} fill="none" stroke={lc} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-    {pts.map((p,i)=><g key={i}>
-      <circle cx={p.x} cy={p.y} r={p.live?5:3.5} fill={p.live?G.white:lc} stroke={lc} strokeWidth={p.live?2.5:1.5}/>
-      <text x={p.x} y={p.y-12} textAnchor="middle" fontSize="9.5"
-        fill={p.live?lc:G.gray1} fontFamily="inherit" fontWeight={p.live?"700":"500"}>{fmtN(p.price)}</text>
-      <text x={p.x} y={H+16} textAnchor="middle" fontSize="9" fill={G.gray2} fontFamily="inherit">{p.label}</text>
-    </g>)}
-  </svg>;
+function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, activeEvent }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick(t => t + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!stock) return null;
+
+  const ri = Math.min(round - 1, stock.prices.length - 1);
+  const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent);
+
+  // 캔들 데이터 생성 (과거 라운드 확정 + 현재 라운드 진행중)
+  const candles = [];
+
+  // 과거 라운드 캔들
+  for (let i = 0; i < ri; i++) {
+    const open = i === 0 ? stock.prices[0] : stock.prices[i - 1];
+    const close = stock.prices[i];
+    const high = Math.max(open, close) * (1 + 0.02);
+    const low = Math.min(open, close) * (1 - 0.02);
+    candles.push({ open, close, high, low, label: `R${i + 1}`, live: false });
+  }
+
+  // 현재 라운드 캔들 (진행중)
+  const currentOpen = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+  const currentClose = curPrice;
+  const high = Math.max(currentOpen, currentClose) * (1 + 0.015);
+  const low = Math.min(currentOpen, currentClose) * (1 - 0.015);
+  candles.push({ open: currentOpen, close: currentClose, high, low, label: `R${round}`, live: true });
+
+  if (candles.length === 0) return null;
+
+  const allPrices = candles.flatMap(c => [c.high, c.low]);
+  const minP = Math.min(...allPrices) * 0.97;
+  const maxP = Math.max(...allPrices) * 1.03;
+  const range = maxP - minP || 1;
+
+  const W = 280, H = 120;
+  const candleW = Math.min(36, (W / candles.length) * 0.55);
+  const gap = W / candles.length;
+
+  const toY = p => H - ((p - minP) / range) * H;
+
+  // 가격 눈금 (4개)
+  const gridLines = Array.from({ length: 4 }, (_, i) => {
+    const p = minP + (range / 3) * i;
+    return { y: toY(p), label: fmtN(Math.round(p)) };
+  });
+
+  return (
+    <svg width="100%" viewBox={`-48 -20 ${W + 60} ${H + 40}`} style={{ overflow: "visible", display: "block" }}>
+      {/* 배경 그리드 */}
+      {gridLines.map((g, i) => (
+        <g key={i}>
+          <line x1={0} y1={g.y} x2={W} y2={g.y} stroke="#E5E8EB" strokeWidth="0.8" strokeDasharray="4,3"/>
+          <text x={-4} y={g.y + 3} textAnchor="end" fontSize="8" fill="#B0B8C1" fontFamily="monospace">{g.label}</text>
+        </g>
+      ))}
+
+      {/* 캔들스틱 */}
+      {candles.map((c, i) => {
+        const x = gap * i + gap / 2;
+        const isUp = c.close >= c.open;
+        const color = isUp ? "#F04452" : "#3182F6";
+        const bodyTop = toY(Math.max(c.open, c.close));
+        const bodyBot = toY(Math.min(c.open, c.close));
+        const bodyH = Math.max(bodyBot - bodyTop, 2);
+        const wickTop = toY(c.high);
+        const wickBot = toY(c.low);
+
+        return (
+          <g key={i}>
+            {/* 위 꼬리 */}
+            <line x1={x} y1={wickTop} x2={x} y2={bodyTop} stroke={color} strokeWidth={c.live ? 1.5 : 1}/>
+            {/* 아래 꼬리 */}
+            <line x1={x} y1={bodyBot} x2={x} y2={wickBot} stroke={color} strokeWidth={c.live ? 1.5 : 1}/>
+            {/* 몸통 */}
+            <rect
+              x={x - candleW / 2} y={bodyTop}
+              width={candleW} height={bodyH}
+              fill={isUp ? color : "none"}
+              stroke={color}
+              strokeWidth={c.live ? 2 : 1.5}
+              rx={2}
+              opacity={c.live ? 1 : 0.85}
+            />
+            {/* 현재가 표시 (진행중 캔들) */}
+            {c.live && (
+              <>
+                <line x1={0} y1={toY(c.close)} x2={W} y2={toY(c.close)}
+                  stroke={color} strokeWidth="1" strokeDasharray="3,2" opacity="0.6"/>
+                <rect x={W + 2} y={toY(c.close) - 8} width={48} height={16} fill={color} rx={3}/>
+                <text x={W + 26} y={toY(c.close) + 4} textAnchor="middle" fontSize="9"
+                  fill="white" fontFamily="monospace" fontWeight="700">{fmtN(c.close)}</text>
+              </>
+            )}
+            {/* 라운드 레이블 */}
+            <text x={x} y={H + 14} textAnchor="middle" fontSize="9.5" fill={c.live ? color : "#8B95A1"}
+              fontFamily="inherit" fontWeight={c.live ? "700" : "400"}>{c.label}</text>
+          </g>
+        );
+      })}
+
+      {/* 현재 라운드 깜빡이는 점 */}
+      {candles.length > 0 && (() => {
+        const last = candles[candles.length - 1];
+        const x = gap * (candles.length - 1) + gap / 2;
+        const y = toY(last.close);
+        const isUp = last.close >= last.open;
+        const color = isUp ? "#F04452" : "#3182F6";
+        return (
+          <circle cx={x} cy={y} r="4" fill={color}>
+            <animate attributeName="opacity" values="1;0.2;1" dur="1.5s" repeatCount="indefinite"/>
+          </circle>
+        );
+      })()}
+    </svg>
+  );
 }
 
 function useRoundTimer(phase,roundEndsAt){
