@@ -950,7 +950,13 @@ function UserApp(){
   const [toast,setToast]=useState({msg:"",show:false});
   const t2=msg=>toast2(setToast,msg);
 
-  useEffect(()=>{if(screen==="main"&&shared.phase==="ended")setScreen("ended");},[shared.phase,screen]);
+  useEffect(()=>{
+    if(screen==="main"&&shared.phase==="ended") setScreen("ended");
+    // 운영자가 게임 초기화하면 ended → main으로 복귀
+    if(screen==="ended"&&shared.phase==="ready") setScreen("main");
+    // 운영자가 초기화하면 팀 데이터도 갱신되므로 탭 초기화
+    if(screen==="ended"&&shared.phase==="round") setScreen("main");
+  },[shared.phase,screen]);
 
   const myTeam=teamId?shared.teams?.[teamId]:null;
   const initCash=shared.initCash||DEFAULT_INIT_CASH;
@@ -1137,6 +1143,16 @@ function UserApp(){
                 <div style={{fontSize:13,fontWeight:700,color:G.black}}>{fmt(t.total)}</div>
               </div>
             ))}
+          </div>
+          <div style={{padding:"16px"}}>
+            {shared.phase==="ready"||shared.phase==="round"
+              ? <Btn onClick={()=>setScreen("main")} style={{width:"100%",padding:"14px",fontSize:15,borderRadius:12}}>
+                  게임 계속하기 →
+                </Btn>
+              : <div style={{textAlign:"center",padding:"12px",fontSize:13,color:G.gray2,background:G.bg,borderRadius:12}}>
+                  운영자가 게임을 초기화하면 다시 참여할 수 있습니다
+                </div>
+            }
           </div>
         </div>
       </div>
