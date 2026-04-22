@@ -345,30 +345,27 @@ function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent,
   const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
   const prev = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
   if (!roundStartedAt || !roundEndsAt) return target;
+
   const now = Date.now();
   const total = roundEndsAt - roundStartedAt;
   const t = Math.min(Math.max((now - roundStartedAt) / total, 0), 1);
   const base = prev + (target - prev) * t;
 
-  // 노이즈: 2초 단위 사인파 + 고주파 혼합
-  const s1 = Math.floor(now / 2000);
-  const s2 = Math.floor(now / 800);
-  const s3 = Math.floor(now / 400);
-  const n1 = Math.sin(s1 * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.6;
-  const n2 = Math.sin(s2 * 6271 + (stock.id?.charCodeAt(1) || 2) * 31337) * 0.3;
-  const n3 = Math.sin(s3 * 3847 + (stock.id?.charCodeAt(2) || 3) * 17239) * 0.1;
-  const noise = n1 + n2 + n3; // -1 ~ +1
+  // 노이즈 시드를 3초 단위로 고정 (화면 가격과 차트 가격 일치)
+  const sid = stock.id?.charCodeAt(0) || 1;
+  const sid2 = stock.id?.charCodeAt(1) || 2;
+  const s1 = Math.floor(now / 3000);
+  const s2 = Math.floor(now / 1200);
+  const n = Math.sin(s1 * 9301 + sid * 49297) * 0.6
+          + Math.sin(s2 * 6271 + sid2 * 31337) * 0.4;
+  const nr = Math.abs(target - prev) * 0.12 + base * 0.015;
+  let price = Math.round(base + n * nr);
 
-  // 노이즈 크기: 시작가~목표가 차이의 15% + 현재가의 2%
-  const noiseRange = Math.abs(target - prev) * 0.15 + base * 0.02;
-  const price = Math.round(base + noise * noiseRange);
-
-  let final = Math.max(price, 1);
   if (activeEvent) {
     const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
-    final = Math.round(final * (1 + eff / 100));
+    price = Math.round(price * (1 + eff / 100));
   }
-  return Math.max(final, 1);
+  return Math.max(price, 1);
 }
 
 // 자동 이벤트 타이머 + 가격 기록 훅
@@ -574,15 +571,13 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
   const dragStartX = useRef(0);
   const scrollAtDrag = useRef(0);
   const lastPinch = useRef(null);
-  const pricePathRef = useRef({});
 
   useEffect(() => {
-    const id = setInterval(() => setTs(Date.now()), 500);
+    const id = setInterval(() => setTs(Date.now()), 3000);
     return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
-    pricePathRef.current = {};
     setUserScroll(null);
     setScale(1);
   }, [round, roundStartedAt]);
@@ -602,61 +597,30 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     ? modifiedTargets[stock.id].modifiedPrice
     : stock.prices[ri];
 
-  const TICK_MS = 1000;
   const CANDLE_MS = 15000;
 
-  const getPath = () => {
-    if (!roundStartedAt) return [];
-    const key = `${stock.id}_${round}_${roundStartedAt}_${target}`;
-    if (pricePathRef.current[key]) return pricePathRef.current[key];
-
-    let seed = roundStartedAt + (stock.id?.charCodeAt(0) || 1) * 137 + target;
-    const rand = () => {
-      seed = (seed * 1664525 + 1013904223) & 0xffffffff;
-      return (seed >>> 0) / 0xffffffff;
-    };
-    const randNorm = () => {
-      const u1 = Math.max(1e-10, rand());
-      const u2 = rand();
-      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-    };
-
-    const totalMs = roundEndsAt - roundStartedAt;
-    const totalTicks = Math.ceil(totalMs / TICK_MS);
-    const vol = Math.abs(target - startPrice) / startPrice * 0.3 + 0.008;
-    const drift = (target - startPrice) / startPrice / totalTicks;
-
-    const path = [{ t: roundStartedAt, p: startPrice }];
-    let price = startPrice;
-
-    for (let i = 1; i <= totalTicks; i++) {
-      const t = roundStartedAt + i * TICK_MS;
-      if (t > roundEndsAt) break;
-      const progress = i / totalTicks;
-      const driftStrength = drift * (1 + progress * 2);
-      const change = price * (driftStrength + vol * randNorm() * 0.4);
-      price = Math.max(1, Math.round(price + change));
-      path.push({ t, p: price });
+  const getPriceAt = (atTs) => {
+    if (!roundStartedAt || !roundEndsAt) return target;
+    const total = roundEndsAt - roundStartedAt;
+    const t = Math.min(Math.max((atTs - roundStartedAt) / total, 0), 1);
+    const base = startPrice + (target - startPrice) * t;
+    const sid = stock.id?.charCodeAt(0) || 1;
+    const sid2 = stock.id?.charCodeAt(1) || 2;
+    const s1 = Math.floor(atTs / 3000);
+    const s2 = Math.floor(atTs / 1200);
+    const n = Math.sin(s1 * 9301 + sid * 49297) * 0.6
+            + Math.sin(s2 * 6271 + sid2 * 31337) * 0.4;
+    const nr = Math.abs(target - startPrice) * 0.12 + base * 0.015;
+    let p = Math.round(base + n * nr);
+    if (activeEvent) {
+      const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
+      p = Math.round(p * (1 + eff / 100));
     }
-    if (path.length > 0) {
-      path[path.length - 1].p = target;
-    }
-
-    pricePathRef.current[key] = path;
-    return path;
+    return Math.max(p, 1);
   };
 
-  const path = getPath();
   const now = Math.min(ts, roundEndsAt || ts);
-  const pathUpToNow = path.filter(p => p.t <= now);
-  const curTick = pathUpToNow[pathUpToNow.length - 1];
-  const curPrice = curTick ? curTick.p : startPrice;
-
-  const applyEvent = (p) => {
-    if (!activeEvent) return p;
-    const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
-    return Math.max(1, Math.round(p * (1 + eff / 100)));
-  };
+  const curPrice = getPriceAt(now);
 
   const prevCandles = [];
   for (let i = 0; i < ri; i++) {
@@ -672,34 +636,29 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
   }
 
   const liveCandles = [];
-  if (roundStartedAt && pathUpToNow.length > 0) {
+  if (roundStartedAt) {
     const elapsed = now - roundStartedAt;
     const doneCnt = Math.floor(elapsed / CANDLE_MS);
 
     for (let ci = 0; ci < doneCnt; ci++) {
       const cs = roundStartedAt + ci * CANDLE_MS;
       const ce = cs + CANDLE_MS;
-      const seg = path.filter(p => p.t >= cs && p.t < ce);
-      if (seg.length === 0) continue;
-      const prices = seg.map(p => applyEvent(p.p));
-      const o = prices[0];
-      const c = prices[prices.length - 1];
-      const h = Math.max(...prices);
-      const l = Math.min(...prices);
-      liveCandles.push({ o, c, h, l, done: true });
+      const steps = 8;
+      const prices = Array.from({ length: steps + 1 }, (_, k) => getPriceAt(cs + (ce - cs) * k / steps));
+      const o = prices[0], c = prices[prices.length - 1];
+      liveCandles.push({ o, c, h: Math.max(...prices), l: Math.min(...prices), done: true });
     }
 
     const cs = roundStartedAt + doneCnt * CANDLE_MS;
-    const seg = pathUpToNow.filter(p => p.t >= cs);
-    if (seg.length > 0) {
-      const prices = seg.map(p => applyEvent(p.p));
+    const elapsed2 = now - cs;
+    if (elapsed2 >= 0) {
+      const steps = Math.max(2, Math.floor(elapsed2 / 3000) + 1);
+      const prices = Array.from({ length: steps }, (_, k) =>
+        getPriceAt(cs + (steps > 1 ? elapsed2 * k / (steps - 1) : 0)));
       const o = prices[0];
-      const c = applyEvent(curPrice);
-      const h = Math.max(...prices, c);
-      const l = Math.min(...prices, c);
-      liveCandles.push({ o, c, h, l, done: false });
+      liveCandles.push({ o, c: curPrice, h: Math.max(...prices, curPrice), l: Math.min(...prices, curPrice), done: false });
     } else {
-      liveCandles.push({ o: applyEvent(curPrice), c: applyEvent(curPrice), h: applyEvent(curPrice), l: applyEvent(curPrice), done: false });
+      liveCandles.push({ o: curPrice, c: curPrice, h: curPrice, l: curPrice, done: false });
     }
   } else {
     liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice), l: Math.min(startPrice, curPrice), done: false });
@@ -844,7 +803,7 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
           <rect x={scrollX + VW - PR + 2} y={toY(curPrice) - 9} width={PR - 4} height={18} fill={lc} rx={4} />
           <text x={scrollX + VW - PR + (PR - 4) / 2 + 2} y={toY(curPrice) + 4.5}
             textAnchor="middle" fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="bold">
-            {fmtN(applyEvent(curPrice))}
+            {fmtN(curPrice)}
           </text>
 
           <circle
@@ -874,7 +833,7 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
 function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets }) {
   const [ts, setTs] = useState(Date.now());
   useEffect(() => {
-    const id = setInterval(() => setTs(Date.now()), 1000);
+    const id = setInterval(() => setTs(Date.now()), 3000);
     return () => clearInterval(id);
   }, []);
 
@@ -884,25 +843,7 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
   const ri = Math.min(round - 1, stock.prices.length - 1);
   const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
 
-  const cur = (() => {
-    if (!roundStartedAt || !roundEndsAt) return stock.prices[ri] ?? startPrice;
-    const total = roundEndsAt - roundStartedAt;
-    const t = Math.min(Math.max((ts - roundStartedAt) / total, 0), 1);
-    const target = modifiedTargets?.[stock.id]?.round === round
-      ? modifiedTargets[stock.id].modifiedPrice
-      : stock.prices[ri];
-    const base = startPrice + (target - startPrice) * t;
-    const s1 = Math.floor(ts / 2000);
-    const n = Math.sin(s1 * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.6
-            + Math.sin(Math.floor(ts / 800) * 6271) * 0.3;
-    const nr = Math.abs(target - startPrice) * 0.1 + base * 0.012;
-    let p = Math.round(base + n * nr);
-    if (activeEvent) {
-      const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
-      p = Math.round(p * (1 + eff / 100));
-    }
-    return Math.max(p, 1);
-  })();
+  const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
 
   const confirmedPts = stock.prices.slice(0, ri);
   const steps = 6;
