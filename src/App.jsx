@@ -630,7 +630,7 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 );
 
 /* ── 캔들스틱 차트 ── */
-function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets }) {
+function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, avgPrice }) {
   const [, tick] = useState(0);
   const containerRef = useRef(null);
   const [containerW, setContainerW] = useState(300);
@@ -840,6 +840,28 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
         {/* 현재 라운드 레이블 */}
         <text x={candleStartX + 2} y={PT - 2}
           fontSize="8.5" fill={lc} fontFamily="inherit" fontWeight="bold">R{round}</text>
+
+        {/* 평단가 선 */}
+        {avgPrice > 0 && avgPrice >= minP && avgPrice <= maxP && (
+          <g>
+            <line
+              x1={PL} y1={toY(avgPrice)}
+              x2={viewW - PR} y2={toY(avgPrice)}
+              stroke={G.purple} strokeWidth="1" strokeDasharray="5,3" opacity="0.8" />
+            <rect x={2} y={toY(avgPrice) - 8} width={PL - 4} height={16}
+              fill={G.purple} rx={3} opacity="0.85" />
+            <text x={PL / 2} y={toY(avgPrice) + 4}
+              textAnchor="middle" fontSize="8" fill="white" fontFamily="monospace" fontWeight="bold">
+              평균
+            </text>
+            <rect x={viewW - PR + 2} y={toY(avgPrice) - 8} width={PR - 4} height={16}
+              fill={G.purple} rx={3} opacity="0.85" />
+            <text x={viewW - PR + (PR - 4) / 2 + 2} y={toY(avgPrice) + 4}
+              textAnchor="middle" fontSize="8" fill="white" fontFamily="monospace" fontWeight="bold">
+              {fmtN(avgPrice)}
+            </text>
+          </g>
+        )}
 
         {/* 현재가 점선 */}
         <line x1={PL} y1={toY(curPrice)} x2={viewW - PR} y2={toY(curPrice)}
@@ -2274,22 +2296,41 @@ function UserApp(){
             <span style={{fontSize:18,lineHeight:1}}>←</span>
             <span style={{fontSize:14,fontWeight:600,color:G.black}}>뒤로가기</span>
           </div>
-          <div style={{fontSize:13,color:G.gray1,marginBottom:2}}>{st.emoji} {st.code}</div>
-          <div style={{fontSize:20,fontWeight:800,color:G.black,marginBottom:4}}>{st.name}</div>
-          {isBlind?(
-            <div style={{fontSize:16,fontWeight:700,color:G.purple}}>🙈 블라인드 라운드 — 가격 숨김</div>
-          ):(
-            <div style={{display:"flex",alignItems:"baseline",gap:10}}>
-              <div style={{fontSize:26,fontWeight:800,color:isUp?G.red:p<0?G.blue:G.black}}>{fmtN(cur)}</div>
-              <div style={{fontSize:13,fontWeight:600,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"▲ +":"▼ "}{p.toFixed(2)}%</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:4}}>
+            <div>
+              <div style={{fontSize:13,color:G.gray1,marginBottom:2}}>{st.emoji} {st.code}</div>
+              <div style={{fontSize:20,fontWeight:800,color:G.black,marginBottom:2}}>{st.name}</div>
+              {isBlind ? (
+                <div style={{fontSize:16,fontWeight:700,color:G.purple}}>🙈 블라인드 라운드</div>
+              ) : (
+                <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                  <div style={{fontSize:26,fontWeight:800,color:isUp?G.red:p<0?G.blue:G.black}}>{fmtN(cur)}</div>
+                  <div style={{fontSize:13,fontWeight:600,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"▲ +":"▼ "}{p.toFixed(2)}%</div>
+                </div>
+              )}
             </div>
-          )}
-          {shared.phase !== "round" && (
-            <div style={{ marginTop: 4, fontSize: 12, color: G.red, fontWeight: 500 }}>
-              🔴 매매 시간이 아닙니다
+            {/* 오른쪽: 라운드 정보 + 타이머 */}
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{background:shared.phase==="round"?G.greenLight:G.gray4,
+                color:shared.phase==="round"?G.green:G.gray1,
+                borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,marginBottom:4,display:"inline-block"}}>
+                {shared.phase==="round"?`Round ${shared.round}`:shared.phase==="break"?`R${shared.round} 종료`:"대기중"}
+              </div>
+              {shared.phase==="round"&&rem!==null&&(
+                <div style={{fontSize:18,fontWeight:800,
+                  color:rem<=30?G.red:rem<=60?G.orange:G.black,
+                  fontFamily:"monospace",display:"block"}}>
+                  ⏱ {secToStr(rem)}
+                </div>
+              )}
             </div>
+          </div>
+          {st.listed===false&&(
+            <div style={{fontSize:12,color:G.red,fontWeight:500,marginTop:2}}>⛔ 폐지된 종목</div>
           )}
-          {st.listed===false&&<div style={{marginTop:4,fontSize:12,color:G.red,fontWeight:500}}>⛔ 폐지된 종목입니다</div>}
+          {shared.phase!=="round"&&st.listed!==false&&(
+            <div style={{fontSize:12,color:G.red,fontWeight:500,marginTop:2}}>🔴 매매 시간이 아닙니다</div>
+          )}
         </div>
         <div style={{paddingBottom:"env(safe-area-inset-bottom, 100px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
           <div style={{background:G.white,padding:"14px 18px 8px",marginBottom:8}}>
@@ -2298,7 +2339,8 @@ function UserApp(){
               roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt}
               activeEvent={shared.activeEvent} blind={isBlind}
               modifiedTargets={shared.modifiedTargets}
-              priceHistory={shared.priceHistory}/>
+              priceHistory={shared.priceHistory}
+              avgPrice={holdings[st.id]?.avgPrice || 0}/>
           </div>
           {holding>0&&(
             <div style={{background:G.white,padding:"13px 18px",marginBottom:8,display:"flex",justifyContent:"space-between"}}>
