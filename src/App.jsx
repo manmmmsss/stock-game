@@ -556,7 +556,17 @@ const Btn=({children,color=G.blue,textColor=G.white,style:s,...p})=>(
     onMouseUp={e=>e.currentTarget.style.opacity="1"}>{children}</button>
 );
 const NumInput=({value,onChange,style:s,...p})=>(
-  <input type="number" value={value} onChange={onChange} {...p}
+  <input type="number" value={value}
+    onChange={onChange}
+    onFocus={e=>e.target.select()}
+    onKeyDown={e=>{
+      // 0일 때 숫자 입력하면 0 제거하고 바로 입력
+      if(String(value)==="0"&&e.key>="0"&&e.key<="9"){
+        e.preventDefault();
+        onChange({target:{value:e.key}});
+      }
+    }}
+    {...p}
     style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,padding:"8px 6px",
       fontSize:13,fontFamily:"monospace",outline:"none",color:G.black,boxSizing:"border-box",textAlign:"center",...s}}/>
 );
@@ -2184,6 +2194,19 @@ function UserApp(){
                       border:`1.5px solid ${G.border}`}}>−</div>
                   <input
                     type="number" value={qty} min={1} max={maxQty||1}
+                    onFocus={e=>e.target.select()}
+                    onKeyDown={e=>{
+                      if(String(qty)==="1"&&e.key>="1"&&e.key<="9"){
+                        e.preventDefault();
+                        const v=parseInt(e.key)||1;
+                        setQty(Math.max(1,Math.min(v,maxQty||1)));
+                      }
+                      if((qty===0||qty===1)&&e.key>="0"&&e.key<="9"){
+                        e.preventDefault();
+                        const v=parseInt(e.key)||1;
+                        setQty(Math.max(1,Math.min(v,maxQty||1)));
+                      }
+                    }}
                     onChange={e=>{
                       const v=parseInt(e.target.value)||1;
                       setQty(Math.max(1,Math.min(v,maxQty||1)));
@@ -2541,6 +2564,13 @@ function UserApp(){
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, color: G.gray2, marginBottom: 3 }}>수량</div>
                       <input type="number" value={tradeQty} min={1}
+                        onFocus={e=>e.target.select()}
+                        onKeyDown={e=>{
+                          if(String(tradeQty)==="1"&&e.key>="0"&&e.key<="9"){
+                            e.preventDefault();
+                            setTradeQty(parseInt(e.key)||1);
+                          }
+                        }}
                         onChange={e => setTradeQty(parseInt(e.target.value) || 1)}
                         style={{ width: "100%", border: `1.5px solid ${G.border}`, borderRadius: 8,
                           padding: "7px 8px", fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}/>
@@ -2548,6 +2578,13 @@ function UserApp(){
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, color: G.gray2, marginBottom: 3 }}>희망가 (원/주)</div>
                       <input type="number" value={tradePrice} min={1}
+                        onFocus={e=>e.target.select()}
+                        onKeyDown={e=>{
+                          if(String(tradePrice)==="0"&&e.key>="0"&&e.key<="9"){
+                            e.preventDefault();
+                            setTradePrice(parseInt(e.key)||0);
+                          }
+                        }}
                         onChange={e => setTradePrice(parseInt(e.target.value) || 0)}
                         style={{ width: "100%", border: `1.5px solid ${G.border}`, borderRadius: 8,
                           padding: "7px 8px", fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}/>
