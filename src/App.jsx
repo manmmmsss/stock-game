@@ -1838,7 +1838,15 @@ function UserApp(){
   const feeAmt=Math.round(orderPrice*effectiveQty*feeRate/100);
 
   const doOrder=async()=>{
-    if(shared.phase!=="round"){t2("현재 매매 시간이 아닙니다");setConfirm(false);return;}
+    const now = Date.now();
+    const isRoundActive = shared.phase === "round"
+      && shared.roundEndsAt
+      && now < shared.roundEndsAt;
+    if (!isRoundActive) {
+      t2("현재 매매 시간이 아닙니다");
+      setConfirm(false);
+      return;
+    }
     const s=detail;
     const cur=orderPrice;
     const cost=cur*effectiveQty;
@@ -2026,7 +2034,16 @@ function UserApp(){
               <div style={{fontSize:13,fontWeight:600,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"▲ +":"▼ "}{p.toFixed(2)}%</div>
             </div>
           )}
-          {shared.phase!=="round"&&<div style={{marginTop:4,fontSize:12,color:G.red,fontWeight:500}}>🔴 매매 시간이 아닙니다</div>}
+          {(() => {
+            const isActive = shared.phase === "round"
+              && shared.roundEndsAt
+              && Date.now() < shared.roundEndsAt;
+            if (isActive) return null;
+            if (shared.phase === "round" && shared.roundEndsAt && Date.now() >= shared.roundEndsAt) {
+              return <div style={{ marginTop: 4, fontSize: 12, color: G.orange, fontWeight: 500 }}>🟡 라운드 종료 처리 중...</div>;
+            }
+            return <div style={{ marginTop: 4, fontSize: 12, color: G.red, fontWeight: 500 }}>🔴 매매 시간이 아닙니다</div>;
+          })()}
           {st.listed===false&&<div style={{marginTop:4,fontSize:12,color:G.red,fontWeight:500}}>⛔ 폐지된 종목입니다</div>}
         </div>
         <div style={{paddingBottom:"env(safe-area-inset-bottom, 100px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
@@ -2106,9 +2123,25 @@ function UserApp(){
               <div style={{fontSize:12,color:G.gray2,textAlign:"right",marginBottom:14}}>
                 {orderSide==="buy"?`잔액 ${fmt(cash)}`:` 보유 ${holding}주`}
               </div>
-              <Btn onClick={()=>setConfirm(true)} color={orderSide==="buy"?G.red:G.blue}
-                style={{width:"100%",padding:"14px",fontSize:15,borderRadius:12}}>
-                {orderSide==="buy"?"매수 주문":"매도 주문"}
+              <Btn
+                onClick={()=>{
+                  const isActive = shared.phase === "round"
+                    && shared.roundEndsAt
+                    && Date.now() < shared.roundEndsAt;
+                  if (!isActive) { t2("현재 매매 시간이 아닙니다"); return; }
+                  setConfirm(true);
+                }}
+                color={
+                  !(shared.phase === "round" && shared.roundEndsAt && Date.now() < shared.roundEndsAt)
+                    ? G.gray3
+                    : orderSide === "buy" ? G.red : G.blue
+                }
+                style={{width:"100%",padding:"14px",fontSize:15,borderRadius:12}}
+              >
+                {!(shared.phase === "round" && shared.roundEndsAt && Date.now() < shared.roundEndsAt)
+                  ? "⏸ 매매 시간 아님"
+                  : orderSide === "buy" ? "매수 주문" : "매도 주문"
+                }
               </Btn>
             </div>
           )}
