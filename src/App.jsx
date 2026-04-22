@@ -45,34 +45,49 @@ function removeUndefined(obj) {
   return result;
 }
 
-const setShared = async (fn) => {
+const setShared = async (fn, opts = {}) => {
   try {
     const snapshot = await get(GAME_REF);
     const current = snapshot.val() || { ...INIT_SS };
     const next = fn(current);
 
-    // teams는 딥머지 (개별 팀 데이터 보존)
-    const merged = { ...current, ...next };
-    if (next.teams && current.teams) {
-      merged.teams = { ...current.teams };
-      for (const [tid, tm] of Object.entries(next.teams)) {
-        merged.teams[tid] = {
-          ...(current.teams[tid] || {}),
-          ...tm,
-          holdings: { ...(current.teams[tid]?.holdings || {}), ...(tm.holdings || {}) },
-          history: Array.isArray(tm.history) ? tm.history : (current.teams[tid]?.history || []),
-          purchases: Array.isArray(tm.purchases) ? tm.purchases : (current.teams[tid]?.purchases || []),
-        };
-      }
-    }
+    let merged;
 
-    // chatMessages 배열 보존
-    if (next.chatMessages && Array.isArray(next.chatMessages)) {
-      merged.chatMessages = next.chatMessages;
-    } else if (!next.hasOwnProperty('chatMessages')) {
-      merged.chatMessages = Array.isArray(current.chatMessages)
-        ? current.chatMessages
-        : Object.values(current.chatMessages || {}).sort((a, b) => a.ts - b.ts);
+    if (opts.force) {
+      // force 모드: 딥머지 없이 완전 교체
+      merged = { ...next };
+    } else {
+      // 일반 모드: teams 딥머지
+      merged = { ...current, ...next };
+
+      if (next.teams && current.teams) {
+        merged.teams = { ...current.teams };
+        for (const [tid, tm] of Object.entries(next.teams)) {
+          merged.teams[tid] = {
+            ...(current.teams[tid] || {}),
+            ...tm,
+            holdings: {
+              ...(current.teams[tid]?.holdings || {}),
+              ...(tm.holdings || {}),
+            },
+            history: Array.isArray(tm.history)
+              ? tm.history
+              : (current.teams[tid]?.history || []),
+            purchases: Array.isArray(tm.purchases)
+              ? tm.purchases
+              : (current.teams[tid]?.purchases || []),
+          };
+        }
+      }
+
+      // chatMessages 배열 보존
+      if (next.chatMessages && Array.isArray(next.chatMessages)) {
+        merged.chatMessages = next.chatMessages;
+      } else if (!next.hasOwnProperty('chatMessages')) {
+        merged.chatMessages = Array.isArray(current.chatMessages)
+          ? current.chatMessages
+          : Object.values(current.chatMessages || {}).sort((a, b) => a.ts - b.ts);
+      }
     }
 
     await fbSet(GAME_REF, removeUndefined(merged));
@@ -1193,21 +1208,72 @@ function AdminApp(){
   };
 
   // 초기화
-  const resetGame=()=>{
-    setShared(s=>{
-      const savedCreds=s.teamCredentials||{};
-      const savedCash=s.initCash||DEFAULT_INIT_CASH;
-      const freshTeams={};
-      for(const [name,{id}] of Object.entries(savedCreds)){
-        freshTeams[id]={name,cash:savedCash,holdings:{},purchases:[],history:[],borrowed:0};
+  const resetGame = async () => {
+    try {
+      // 현재 DB에서 유지할 데이터 먼저 읽기
+      const snapshot = await get(GAME_REF);
+      const current = snapshot.val() || {};
+
+      const savedCreds = current.teamCredentials || {};
+      const savedCash = current.initCash || DEFAULT_INIT_CASH;
+
+      // 팀 완전 초기화 (holdings, purchases, history 전부 리셋)
+      const freshTeams = {};
+      for (const [name, { id }] of Object.entries(savedCreds)) {
+        freshTeams[id] = {
+          name,
+          cash: savedCash,
+          holdings: {},
+          purchases: [],
+          history: [],
+          borrowed: 0,
+        };
       }
-      return{...s,phase:"ready",round:0,roundStartedAt:null,roundEndsAt:null,
-        activeEvent:null,eventHistory:[],notice:"",noticeAt:null,bonusPool:{},
-        priceHistory:{},modifiedTargets:{},nextAutoEventAt:null,
-        chatMessages:[],tradeOffers:{},
-        teams:freshTeams};
-    });
-    t2("게임 초기화 ✓ (설정·팀 유지)");
+
+      // 유지할 설정 데이터
+      const keepSettings = {
+        stocks: current.stocks,
+        rounds: current.rounds,
+        shopItems: current.shopItems,
+        eventPresets: current.eventPresets,
+        customTemplates: current.customTemplates || [],
+        maxRound: current.maxRound,
+        initCash: current.initCash,
+        feeRate: current.feeRate,
+        leverageEnabled: current.leverageEnabled,
+        leverageMax: current.leverageMax,
+        teamCredentials: savedCreds,
+      };
+
+      // 새 게임 상태 (force로 완전 덮어쓰기)
+      const newState = removeUndefined({
+        ...keepSettings,
+        // 게임 진행 상태 초기화
+        phase: "ready",
+        round: 0,
+        roundStartedAt: null,
+        roundEndsAt: null,
+        activeEvent: null,
+        eventHistory: [],
+        notice: "",
+        noticeAt: null,
+        bonusPool: {},
+        priceHistory: {},
+        modifiedTargets: {},
+        nextAutoEventAt: null,
+        chatMessages: [],
+        tradeOffers: {},
+        // 초기화된 팀 데이터
+        teams: freshTeams,
+      });
+
+      // force 모드로 Firebase에 완전 덮어쓰기
+      await fbSet(GAME_REF, newState);
+      t2("게임 초기화 ✓ (설정·팀 계정 유지)");
+    } catch(e) {
+      console.error("resetGame error:", e);
+      t2("초기화 중 오류 발생");
+    }
   };
 
   const getRank=()=>Object.entries(shared.teams||{}).map(([id,tm])=>{
