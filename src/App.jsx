@@ -66,10 +66,13 @@ const setShared = async (fn, opts = {}) => {
           merged.teams[tid] = {
             ...(current.teams[tid] || {}),
             ...tm,
-            holdings: {
-              ...(current.teams[tid]?.holdings || {}),
-              ...(tm.holdings || {}),
-            },
+            holdings: (() => {
+              const base = current.teams[tid]?.holdings || {};
+              const cleaned = Object.fromEntries(
+                Object.entries(base).filter(([k]) => k !== '_empty')
+              );
+              return { ...cleaned, ...(tm.holdings || {}) };
+            })(),
             history: Array.isArray(tm.history)
               ? tm.history
               : (current.teams[tid]?.history || []),
@@ -138,6 +141,37 @@ const useShared = () => {
             if (tm.borrowed === undefined) val.teams[tid].borrowed = 0;
           }
         }
+        // _empty 플래그 제거
+        if (val.teams) {
+          for (const tid of Object.keys(val.teams)) {
+            const tm = val.teams[tid];
+            if (tm.holdings?._empty) {
+              val.teams[tid].holdings = {};
+            }
+            if (Array.isArray(tm.purchases)) {
+              val.teams[tid].purchases = tm.purchases.filter(x => x !== "_empty");
+            }
+            if (Array.isArray(tm.history)) {
+              val.teams[tid].history = tm.history.filter(x => x !== "_empty" && typeof x === 'object');
+            }
+          }
+        }
+        if (Array.isArray(val.chatMessages)) {
+          val.chatMessages = val.chatMessages.filter(x => x !== "_empty" && typeof x === 'object');
+        }
+        if (Array.isArray(val.eventHistory)) {
+          val.eventHistory = val.eventHistory.filter(x => x !== "_empty" && typeof x === 'object');
+        }
+        if (val.bonusPool?._empty) val.bonusPool = {};
+        if (val.priceHistory?._empty) val.priceHistory = {};
+        if (val.modifiedTargets?._empty) val.modifiedTargets = {};
+        if (val.tradeOffers?._empty) val.tradeOffers = {};
+        if (!val.roundStartedAt || val.roundStartedAt === 0) val.roundStartedAt = null;
+        if (!val.roundEndsAt || val.roundEndsAt === 0) val.roundEndsAt = null;
+        if (!val.activeEvent || val.activeEvent === 0) val.activeEvent = null;
+        if (!val.noticeAt || val.noticeAt === 0) val.noticeAt = null;
+        if (!val.nextAutoEventAt || val.nextAutoEventAt === 0) val.nextAutoEventAt = null;
+
         set(val);
       } else {
         set({ ...INIT_SS });
@@ -1210,66 +1244,57 @@ function AdminApp(){
   // 초기화
   const resetGame = async () => {
     try {
-      // 현재 DB에서 유지할 데이터 먼저 읽기
       const snapshot = await get(GAME_REF);
       const current = snapshot.val() || {};
-
       const savedCreds = current.teamCredentials || {};
       const savedCash = current.initCash || DEFAULT_INIT_CASH;
 
-      // 팀 완전 초기화 (holdings, purchases, history 전부 리셋)
+      // 팀 완전 초기화
+      // Firebase가 빈 {}를 삭제하므로 _reset 플래그로 표시
       const freshTeams = {};
-      for (const [name, { id }] of Object.entries(savedCreds)) {
+      for (const [name, { id, pw }] of Object.entries(savedCreds)) {
         freshTeams[id] = {
           name,
           cash: savedCash,
-          holdings: {},
-          purchases: [],
-          history: [],
+          holdings: { _empty: true },  // Firebase 빈객체 방지용
+          purchases: ["_empty"],        // Firebase 빈배열 방지용
+          history: ["_empty"],
           borrowed: 0,
+          pw,
         };
       }
 
-      // 유지할 설정 데이터
-      const keepSettings = {
-        stocks: current.stocks,
-        rounds: current.rounds,
-        shopItems: current.shopItems,
-        eventPresets: current.eventPresets,
+      const newState = {
+        stocks: current.stocks || [],
+        rounds: current.rounds || [],
+        shopItems: current.shopItems || [],
+        eventPresets: current.eventPresets || [],
         customTemplates: current.customTemplates || [],
-        maxRound: current.maxRound,
-        initCash: current.initCash,
-        feeRate: current.feeRate,
-        leverageEnabled: current.leverageEnabled,
-        leverageMax: current.leverageMax,
+        maxRound: current.maxRound || 3,
+        initCash: savedCash,
+        feeRate: current.feeRate || 0.1,
+        leverageEnabled: current.leverageEnabled || false,
+        leverageMax: current.leverageMax || 2,
         teamCredentials: savedCreds,
-      };
-
-      // 새 게임 상태 (force로 완전 덮어쓰기)
-      const newState = removeUndefined({
-        ...keepSettings,
-        // 게임 진행 상태 초기화
+        teams: freshTeams,
         phase: "ready",
         round: 0,
-        roundStartedAt: null,
-        roundEndsAt: null,
-        activeEvent: null,
-        eventHistory: [],
+        roundStartedAt: 0,
+        roundEndsAt: 0,
+        activeEvent: 0,
+        eventHistory: ["_empty"],
         notice: "",
-        noticeAt: null,
-        bonusPool: {},
-        priceHistory: {},
-        modifiedTargets: {},
-        nextAutoEventAt: null,
-        chatMessages: [],
-        tradeOffers: {},
-        // 초기화된 팀 데이터
-        teams: freshTeams,
-      });
+        noticeAt: 0,
+        bonusPool: { _empty: true },
+        priceHistory: { _empty: true },
+        modifiedTargets: { _empty: true },
+        nextAutoEventAt: 0,
+        chatMessages: ["_empty"],
+        tradeOffers: { _empty: true },
+      };
 
-      // force 모드로 Firebase에 완전 덮어쓰기
       await fbSet(GAME_REF, newState);
-      t2("게임 초기화 ✓ (설정·팀 계정 유지)");
+      t2("게임 초기화 ✓");
     } catch(e) {
       console.error("resetGame error:", e);
       t2("초기화 중 오류 발생");
