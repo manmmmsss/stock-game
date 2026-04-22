@@ -563,17 +563,24 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 /* ── 캔들스틱 차트 ── */
 function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets }) {
   const [ts, setTs] = useState(Date.now());
-  const [scrollX, setScrollX] = useState(0);
   const [scale, setScale] = useState(1);
-  const svgRef = useRef(null);
+  const [userScroll, setUserScroll] = useState(null);
   const isDragging = useRef(false);
-  const dragStart = useRef(0);
-  const scrollStart = useRef(0);
+  const dragStartX = useRef(0);
+  const scrollAtDrag = useRef(0);
+  const lastPinch = useRef(null);
+  const pricePathRef = useRef({});
 
   useEffect(() => {
     const id = setInterval(() => setTs(Date.now()), 500);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    pricePathRef.current = {};
+    setUserScroll(null);
+    setScale(1);
+  }, [round, roundStartedAt]);
 
   if (!stock) return null;
 
@@ -590,207 +597,210 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     ? modifiedTargets[stock.id].modifiedPrice
     : stock.prices[ri];
 
-  const CANDLE_MS = 20000;
+  const TICK_MS = 1000;
+  const CANDLE_MS = 15000;
 
-  const getPriceAt = (atTs) => {
-    if (!roundStartedAt || !roundEndsAt) return target;
-    const total = roundEndsAt - roundStartedAt;
-    const t = Math.min(Math.max((atTs - roundStartedAt) / total, 0), 1);
-    const base = startPrice + (target - startPrice) * t;
-    const sid = stock.id?.charCodeAt(0) || 1;
-    const sid2 = stock.id?.charCodeAt(1) || 2;
-    const s1 = Math.floor(atTs / 2000);
-    const s2 = Math.floor(atTs / 700);
-    const s3 = Math.floor(atTs / 300);
-    const n = Math.sin(s1 * 9301 + sid * 49297) * 0.55
-            + Math.sin(s2 * 6271 + sid2 * 31337) * 0.3
-            + Math.sin(s3 * 3847 + sid * 17239) * 0.15;
-    const nr = Math.abs(target - startPrice) * 0.14 + base * 0.018;
-    let p = Math.round(base + n * nr);
-    if (activeEvent) {
-      const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
-      p = Math.round(p * (1 + eff / 100));
+  const getPath = () => {
+    if (!roundStartedAt) return [];
+    const key = `${stock.id}_${round}_${roundStartedAt}_${target}`;
+    if (pricePathRef.current[key]) return pricePathRef.current[key];
+
+    let seed = roundStartedAt + (stock.id?.charCodeAt(0) || 1) * 137 + target;
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+      return (seed >>> 0) / 0xffffffff;
+    };
+    const randNorm = () => {
+      const u1 = Math.max(1e-10, rand());
+      const u2 = rand();
+      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    };
+
+    const totalMs = roundEndsAt - roundStartedAt;
+    const totalTicks = Math.ceil(totalMs / TICK_MS);
+    const vol = Math.abs(target - startPrice) / startPrice * 0.3 + 0.008;
+    const drift = (target - startPrice) / startPrice / totalTicks;
+
+    const path = [{ t: roundStartedAt, p: startPrice }];
+    let price = startPrice;
+
+    for (let i = 1; i <= totalTicks; i++) {
+      const t = roundStartedAt + i * TICK_MS;
+      if (t > roundEndsAt) break;
+      const progress = i / totalTicks;
+      const driftStrength = drift * (1 + progress * 2);
+      const change = price * (driftStrength + vol * randNorm() * 0.4);
+      price = Math.max(1, Math.round(price + change));
+      path.push({ t, p: price });
     }
-    return Math.max(p, 1);
+    if (path.length > 0) {
+      path[path.length - 1].p = target;
+    }
+
+    pricePathRef.current[key] = path;
+    return path;
   };
 
-  const curPrice = getPriceAt(ts);
+  const path = getPath();
+  const now = Math.min(ts, roundEndsAt || ts);
+  const pathUpToNow = path.filter(p => p.t <= now);
+  const curTick = pathUpToNow[pathUpToNow.length - 1];
+  const curPrice = curTick ? curTick.p : startPrice;
+
+  const applyEvent = (p) => {
+    if (!activeEvent) return p;
+    const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
+    return Math.max(1, Math.round(p * (1 + eff / 100)));
+  };
 
   const prevCandles = [];
   for (let i = 0; i < ri; i++) {
     const o = i === 0 ? stock.prices[0] : stock.prices[i - 1];
     const c = stock.prices[i];
-    const spread = Math.abs(c - o) * 0.3 + Math.min(o, c) * 0.012;
-    prevCandles.push({ o, c, h: Math.max(o, c) + spread, l: Math.min(o, c) - spread, label: `R${i + 1}`, done: true });
+    const wick = Math.abs(c - o) * 0.3 + Math.min(o, c) * 0.005;
+    prevCandles.push({
+      o, c,
+      h: Math.max(o, c) + wick,
+      l: Math.max(1, Math.min(o, c) - wick),
+      label: `R${i + 1}`, done: true,
+    });
   }
 
   const liveCandles = [];
-  if (roundStartedAt) {
-    const elapsed = Math.max(0, ts - roundStartedAt);
+  if (roundStartedAt && pathUpToNow.length > 0) {
+    const elapsed = now - roundStartedAt;
     const doneCnt = Math.floor(elapsed / CANDLE_MS);
 
-    for (let i = 0; i < doneCnt; i++) {
-      const cs = roundStartedAt + i * CANDLE_MS;
+    for (let ci = 0; ci < doneCnt; ci++) {
+      const cs = roundStartedAt + ci * CANDLE_MS;
       const ce = cs + CANDLE_MS;
-      const open = getPriceAt(cs);
-      const close = getPriceAt(ce - 100);
-      let high = Math.max(open, close);
-      let low = Math.min(open, close);
-      for (let s = 1; s <= 10; s++) {
-        const p = getPriceAt(cs + (CANDLE_MS / 10) * s);
-        high = Math.max(high, p); low = Math.min(low, p);
-      }
-      const tail = Math.max((high - low) * 0.2, close * 0.004);
-      liveCandles.push({ o: open, c: close, h: high + tail, l: Math.max(1, low - tail), done: true });
+      const seg = path.filter(p => p.t >= cs && p.t < ce);
+      if (seg.length === 0) continue;
+      const prices = seg.map(p => applyEvent(p.p));
+      const o = prices[0];
+      const c = prices[prices.length - 1];
+      const h = Math.max(...prices);
+      const l = Math.min(...prices);
+      liveCandles.push({ o, c, h, l, done: true });
     }
 
     const cs = roundStartedAt + doneCnt * CANDLE_MS;
-    const elIn = elapsed - doneCnt * CANDLE_MS;
-    const open = getPriceAt(cs);
-    let high = Math.max(open, curPrice), low = Math.min(open, curPrice);
-    const steps = Math.max(2, Math.floor(elIn / 500));
-    for (let s = 0; s <= steps; s++) {
-      const p = getPriceAt(cs + (elIn / steps) * s);
-      high = Math.max(high, p); low = Math.min(low, p);
+    const seg = pathUpToNow.filter(p => p.t >= cs);
+    if (seg.length > 0) {
+      const prices = seg.map(p => applyEvent(p.p));
+      const o = prices[0];
+      const c = applyEvent(curPrice);
+      const h = Math.max(...prices, c);
+      const l = Math.min(...prices, c);
+      liveCandles.push({ o, c, h, l, done: false });
+    } else {
+      liveCandles.push({ o: applyEvent(curPrice), c: applyEvent(curPrice), h: applyEvent(curPrice), l: applyEvent(curPrice), done: false });
     }
-    const tail = Math.max((high - low) * 0.2, curPrice * 0.004);
-    liveCandles.push({ o: open, c: curPrice, h: high + tail, l: Math.max(1, low - tail), done: false });
   } else {
-    liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice) * 1.01, l: Math.min(startPrice, curPrice) * 0.99, done: false });
+    liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice), l: Math.min(startPrice, curPrice), done: false });
   }
 
   const all = [...prevCandles, ...liveCandles];
 
-  const VIEWPORT_W = 320;
-  const H = 170;
-  const PL = 4, PR = 72, PT = 14, PB = 24;
-  const ch = H - PT - PB;
-
-  const BASE_SLOT = 22;
-  const slotW = BASE_SLOT * scale;
-  const bw = Math.max(4, Math.min(slotW * 0.65, 20));
-
-  const totalCandleW = all.length * slotW;
-  const maxScroll = Math.max(0, totalCandleW - (VIEWPORT_W - PL - PR));
-  const autoScrollX = Math.max(0, totalCandleW - (VIEWPORT_W - PL - PR));
-
   const allP = all.flatMap(c => [c.h, c.l]);
   const dMin = Math.min(...allP), dMax = Math.max(...allP);
-  const pad = Math.max((dMax - dMin) * 0.1, dMin * 0.005);
+  const pad = Math.max((dMax - dMin) * 0.12, dMin * 0.004);
   const minP = dMin - pad, maxP = dMax + pad, range = maxP - minP || 1;
-  const toY = v => Math.max(PT, Math.min(PT + ch, PT + ch - ((v - minP) / range) * ch));
+
+  const VW = 320, H = 180;
+  const PL = 4, PR = 72, PT = 14, PB = 24;
+  const viewW = VW - PL - PR;
+  const ch = H - PT - PB;
+  const toY = v => Math.max(PT + 1, Math.min(PT + ch - 1, PT + ch - ((v - minP) / range) * ch));
+
+  const BASE_SLOT = 18;
+  const slotW = BASE_SLOT * scale;
+  const bw = Math.max(4, Math.min(slotW * 0.65, 18));
+  const totalW = all.length * slotW;
+
+  const maxScroll = Math.max(0, totalW - viewW);
+  const scrollX = userScroll !== null ? Math.min(userScroll, maxScroll) : maxScroll;
 
   const UP = G.red, DN = G.blue;
   const isUpNow = curPrice >= startPrice;
   const lc = isUpNow ? UP : DN;
   const blinkOp = 0.35 + 0.65 * Math.abs(Math.sin(ts * 0.003));
 
-  const grids = [0, 1, 2, 3].map(i => {
-    const v = minP + (range / 3) * i;
+  const grids = [0, 1, 2, 3, 4].map(i => {
+    const v = minP + (range / 4) * i;
     return { y: toY(v), label: fmtN(Math.round(v)) };
   });
 
-  const viewOffset = scrollX === 0 ? autoScrollX : scrollX;
-
-  const onTouchStart = e => {
-    isDragging.current = true;
-    dragStart.current = e.touches[0].clientX;
-    scrollStart.current = viewOffset;
-  };
-  const onTouchMove = e => {
-    if (!isDragging.current) return;
-    const dx = dragStart.current - e.touches[0].clientX;
-    setScrollX(Math.max(0, Math.min(maxScroll, scrollStart.current + dx)));
-  };
-  const onTouchEnd = () => { isDragging.current = false; };
-  const onMouseDown = e => {
-    isDragging.current = true;
-    dragStart.current = e.clientX;
-    scrollStart.current = viewOffset;
-  };
+  const onMouseDown = e => { isDragging.current = true; dragStartX.current = e.clientX; scrollAtDrag.current = scrollX; };
   const onMouseMove = e => {
     if (!isDragging.current) return;
-    const dx = dragStart.current - e.clientX;
-    setScrollX(Math.max(0, Math.min(maxScroll, scrollStart.current + dx)));
+    const dx = dragStartX.current - e.clientX;
+    setUserScroll(Math.max(0, Math.min(maxScroll, scrollAtDrag.current + dx)));
   };
   const onMouseUp = () => { isDragging.current = false; };
 
-  const lastPinchDist = useRef(null);
-  const onTouchStartPinch = e => {
+  const onTouchStart = e => {
     if (e.touches.length === 2) {
-      lastPinchDist.current = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-    } else { onTouchStart(e); }
+      lastPinch.current = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    } else {
+      isDragging.current = true;
+      dragStartX.current = e.touches[0].clientX;
+      scrollAtDrag.current = scrollX;
+    }
   };
-  const onTouchMovePinch = e => {
-    if (e.touches.length === 2 && lastPinchDist.current) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const ratio = dist / lastPinchDist.current;
-      setScale(s => Math.max(0.5, Math.min(4, s * ratio)));
-      lastPinchDist.current = dist;
-    } else { onTouchMove(e); }
+  const onTouchMove = e => {
+    if (e.touches.length === 2 && lastPinch.current) {
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      setScale(s => Math.max(0.4, Math.min(4, s * (dist / lastPinch.current))));
+      lastPinch.current = dist;
+    } else if (isDragging.current) {
+      const dx = dragStartX.current - e.touches[0].clientX;
+      setUserScroll(Math.max(0, Math.min(maxScroll, scrollAtDrag.current + dx)));
+    }
   };
+  const onTouchEnd = () => { isDragging.current = false; lastPinch.current = null; };
 
   return (
-    <div style={{ position: "relative", userSelect: "none" }}>
-      <div style={{ position: "absolute", top: 4, right: PR + 4, display: "flex", gap: 4, zIndex: 10 }}>
-        {[["−", 0.7], ["+", 1.4]].map(([label, factor]) => (
-          <div key={label} onClick={() => setScale(s => Math.max(0.5, Math.min(4, s * factor)))}
+    <div style={{ position: "relative", touchAction: "none", userSelect: "none" }}>
+      <div style={{ position: "absolute", top: 4, right: PR + 6, display: "flex", gap: 4, zIndex: 10 }}>
+        {[["−", 0.7], ["+", 1.43]].map(([label, f]) => (
+          <div key={label} onClick={() => setScale(s => Math.max(0.4, Math.min(4, s * f)))}
             style={{ width: 22, height: 22, borderRadius: 6, background: G.bg, border: `1px solid ${G.border}`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 14, fontWeight: 700, color: G.gray1, cursor: "pointer", lineHeight: 1 }}>
+              fontSize: 14, fontWeight: 700, color: G.gray1, cursor: "pointer" }}>
             {label}
           </div>
         ))}
+        {userScroll !== null && (
+          <div onClick={() => setUserScroll(null)}
+            style={{ width: 22, height: 22, borderRadius: 6, background: G.blueLight, border: `1px solid ${G.blue}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 10, fontWeight: 700, color: G.blue, cursor: "pointer" }}>
+            ▶
+          </div>
+        )}
       </div>
 
-      <div
-        style={{ overflow: "hidden", cursor: isDragging.current ? "grabbing" : "grab", touchAction: "none" }}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-        onTouchStart={onTouchStartPinch}
-        onTouchMove={onTouchMovePinch}
-        onTouchEnd={onTouchEnd}
-      >
-        <svg
-          ref={svgRef}
-          width="100%"
-          viewBox={`${viewOffset} 0 ${VIEWPORT_W} ${H}`}
-          style={{ display: "block", overflow: "visible" }}
-        >
+      <div style={{ overflow: "hidden", cursor: "grab" }}
+        onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <svg width="100%" viewBox={`${scrollX} 0 ${VW} ${H}`} style={{ display: "block", overflow: "visible" }}>
+
           {grids.map((g, i) => (
             <g key={i}>
-              <line x1={viewOffset + PL} y1={g.y} x2={viewOffset + VIEWPORT_W - PR} y2={g.y}
+              <line x1={scrollX + PL} y1={g.y} x2={scrollX + VW - PR} y2={g.y}
                 stroke={G.border} strokeWidth="0.6" strokeDasharray="3,4" />
-              <text x={viewOffset + VIEWPORT_W - PR + 3} y={g.y + 3.5}
+              <text x={scrollX + VW - PR + 3} y={g.y + 3.5}
                 fontSize="8" fill={G.gray2} fontFamily="monospace">{g.label}</text>
             </g>
           ))}
 
           {prevCandles.length > 0 && (
             <line
-              x1={PL + prevCandles.length * slotW - slotW * 0.3} y1={PT - 4}
-              x2={PL + prevCandles.length * slotW - slotW * 0.3} y2={PT + ch + 2}
-              stroke={G.border} strokeWidth="0.8" strokeDasharray="3,2" />
+              x1={PL + prevCandles.length * slotW - 1} y1={PT - 4}
+              x2={PL + prevCandles.length * slotW - 1} y2={PT + ch + 2}
+              stroke={G.gray3} strokeWidth="0.8" strokeDasharray="3,2" />
           )}
-
-          {all.map((c, i) => {
-            if (i === 0) return null;
-            const prev = all[i - 1];
-            const x1 = PL + slotW * (i - 1) + slotW / 2 + bw / 2 + 1;
-            const x2 = PL + slotW * i + slotW / 2 - bw / 2 - 1;
-            return (
-              <line key={`conn${i}`} x1={x1} y1={toY(prev.c)} x2={x2} y2={toY(c.o)}
-                stroke={G.gray3} strokeWidth="0.7" strokeDasharray="2,2" />
-            );
-          })}
 
           {all.map((c, i) => {
             const x = PL + slotW * i + slotW / 2;
@@ -798,17 +808,20 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
             const col = isUp ? UP : DN;
             const bTop = toY(Math.max(c.o, c.c));
             const bBot = toY(Math.min(c.o, c.c));
-            const bH = Math.max(bBot - bTop, 2);
+            const bH = Math.max(bBot - bTop, 1.5);
             const wTop = toY(c.h), wBot = toY(c.l);
             const lw = !c.done ? 2 : 1.5;
             return (
               <g key={i}>
-                <line x1={x} y1={wTop} x2={x} y2={bTop} stroke={col} strokeWidth={lw} strokeLinecap="round" />
-                <line x1={x} y1={bBot} x2={x} y2={wBot} stroke={col} strokeWidth={lw} strokeLinecap="round" />
+                <line x1={x} y1={wTop} x2={x} y2={bTop}
+                  stroke={col} strokeWidth={Math.max(lw * 0.6, 1)} strokeLinecap="round" />
+                <line x1={x} y1={bBot} x2={x} y2={wBot}
+                  stroke={col} strokeWidth={Math.max(lw * 0.6, 1)} strokeLinecap="round" />
                 <rect x={x - bw / 2} y={bTop} width={bw} height={bH}
-                  fill={col} stroke={col} strokeWidth={lw} rx={1.5} />
+                  fill={col} stroke={col} strokeWidth={lw} rx={1} />
                 {c.label && (
-                  <text x={x} y={H - 6} textAnchor="middle" fontSize="9" fill={G.gray2} fontFamily="inherit">{c.label}</text>
+                  <text x={x} y={H - 6} textAnchor="middle" fontSize="8.5"
+                    fill={G.gray2} fontFamily="inherit">{c.label}</text>
                 )}
               </g>
             );
@@ -816,40 +829,38 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
 
           <text
             x={PL + (prevCandles.length + liveCandles.length / 2) * slotW}
-            y={H - 6} textAnchor="middle" fontSize="9.5"
-            fill={lc} fontFamily="inherit" fontWeight="bold">R{round}</text>
-
-          <line
-            x1={viewOffset + PL} y1={toY(curPrice)}
-            x2={viewOffset + VIEWPORT_W - PR} y2={toY(curPrice)}
-            stroke={lc} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.8" />
-
-          <rect x={viewOffset + VIEWPORT_W - PR + 2} y={toY(curPrice) - 9} width={PR - 4} height={18} fill={lc} rx={4} />
-          <text x={viewOffset + VIEWPORT_W - PR + (PR - 4) / 2 + 2} y={toY(curPrice) + 4.5}
-            textAnchor="middle" fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="bold">
-            {fmtN(curPrice)}
+            y={H - 6} textAnchor="middle" fontSize="9" fill={lc} fontFamily="inherit" fontWeight="bold">
+            R{round}
           </text>
 
-          {(() => {
-            const lastX = PL + (all.length - 1) * slotW + slotW / 2;
-            return <circle cx={lastX} cy={toY(curPrice)} r="3.5" fill={lc} opacity={blinkOp} />;
-          })()}
+          <line x1={scrollX + PL} y1={toY(curPrice)} x2={scrollX + VW - PR} y2={toY(curPrice)}
+            stroke={lc} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.8" />
+
+          <rect x={scrollX + VW - PR + 2} y={toY(curPrice) - 9} width={PR - 4} height={18} fill={lc} rx={4} />
+          <text x={scrollX + VW - PR + (PR - 4) / 2 + 2} y={toY(curPrice) + 4.5}
+            textAnchor="middle" fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="bold">
+            {fmtN(applyEvent(curPrice))}
+          </text>
+
+          <circle
+            cx={PL + (all.length - 1) * slotW + slotW / 2}
+            cy={toY(curPrice)} r="3.5" fill={lc} opacity={blinkOp} />
         </svg>
       </div>
 
       {maxScroll > 0 && (
-        <div style={{ height: 3, background: G.border, borderRadius: 2, margin: "4px 0" }}>
+        <div style={{ height: 3, background: G.border, borderRadius: 2, margin: "2px 0", position: "relative" }}>
           <div style={{
-            height: "100%", borderRadius: 2, background: G.gray2,
-            width: `${((VIEWPORT_W - PL - PR) / totalCandleW * 100).toFixed(1)}%`,
-            marginLeft: `${(viewOffset / totalCandleW * 100).toFixed(1)}%`,
-            transition: "margin-left 0.1s",
+            position: "absolute", height: "100%", borderRadius: 2, background: G.gray2,
+            width: `${Math.max(10, viewW / totalW * 100).toFixed(1)}%`,
+            left: `${(scrollX / Math.max(totalW, 1) * 100).toFixed(1)}%`,
           }} />
         </div>
       )}
     </div>
   );
 }
+
 
 
 
