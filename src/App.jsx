@@ -583,7 +583,9 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     ? modifiedTargets[stock.id].modifiedPrice
     : stock.prices[ri];
 
-  const getLivePrice = (atTs) => {
+  const CANDLE_MS = 5000;
+
+  const getPriceAt = (atTs) => {
     if (!roundStartedAt || !roundEndsAt) return target;
     const total = roundEndsAt - roundStartedAt;
     const t = Math.min(Math.max((atTs - roundStartedAt) / total, 0), 1);
@@ -592,9 +594,11 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     const s2 = Math.floor(atTs / 700);
     const s3 = Math.floor(atTs / 300);
     const sid = stock.id?.charCodeAt(0) || 1;
+    const sid2 = stock.id?.charCodeAt(1) || 2;
+    const sid3 = stock.id?.charCodeAt(2) || 3;
     const n = Math.sin(s1 * 9301 + sid * 49297) * 0.55
-            + Math.sin(s2 * 6271 + sid * 31337) * 0.3
-            + Math.sin(s3 * 3847 + sid * 17239) * 0.15;
+            + Math.sin(s2 * 6271 + sid2 * 31337) * 0.3
+            + Math.sin(s3 * 3847 + sid3 * 17239) * 0.15;
     const nr = Math.abs(target - startPrice) * 0.14 + base * 0.018;
     let p = Math.round(base + n * nr);
     if (activeEvent) {
@@ -604,66 +608,69 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     return Math.max(p, 1);
   };
 
-  const curPrice = getLivePrice(ts);
+  const curPrice = getPriceAt(ts);
 
   const prevCandles = [];
   for (let i = 0; i < ri; i++) {
     const o = i === 0 ? stock.prices[0] : stock.prices[i - 1];
     const c = stock.prices[i];
     const spread = Math.abs(c - o) * 0.28 + Math.min(o, c) * 0.01;
-    prevCandles.push({ o, c, h: Math.max(o, c) + spread, l: Math.min(o, c) - spread, label: `R${i + 1}`, done: true });
+    prevCandles.push({
+      o, c,
+      h: Math.max(o, c) + spread,
+      l: Math.min(o, c) - spread,
+      label: `R${i + 1}`, done: true,
+    });
   }
 
-  const CANDLE_MS = 5000;
   const liveCandles = [];
-
   if (roundStartedAt) {
-    const elapsed = ts - roundStartedAt;
-    const doneCandleCount = Math.floor(elapsed / CANDLE_MS);
-    const currentCandleIdx = doneCandleCount;
+    const elapsed = Math.max(0, ts - roundStartedAt);
+    const doneCnt = Math.floor(elapsed / CANDLE_MS);
 
-    for (let i = 0; i < doneCandleCount; i++) {
-      const candleStart = roundStartedAt + i * CANDLE_MS;
-      const candleEnd = candleStart + CANDLE_MS;
-      const open = getLivePrice(candleStart);
-      const close = getLivePrice(candleEnd - 100);
+    for (let i = 0; i < doneCnt; i++) {
+      const cs = roundStartedAt + i * CANDLE_MS;
+      const ce = cs + CANDLE_MS;
+      const open = getPriceAt(cs);
+      const close = getPriceAt(ce - 50);
       let high = Math.max(open, close);
       let low = Math.min(open, close);
-      for (let step = 1; step <= 8; step++) {
-        const p = getLivePrice(candleStart + (CANDLE_MS / 8) * step);
+      for (let step = 1; step <= 10; step++) {
+        const p = getPriceAt(cs + (CANDLE_MS / 10) * step);
         high = Math.max(high, p);
         low = Math.min(low, p);
       }
-      const spread = Math.max((high - low) * 0.15, close * 0.003);
-      liveCandles.push({ o: open, c: close, h: high + spread, l: Math.max(1, low - spread), done: true });
+      const tail = Math.max((high - low) * 0.18, close * 0.003);
+      liveCandles.push({ o: open, c: close, h: high + tail, l: Math.max(1, low - tail), done: true });
     }
 
-    const currentCandleStart = roundStartedAt + currentCandleIdx * CANDLE_MS;
-    const open = getLivePrice(currentCandleStart);
+    const cs = roundStartedAt + doneCnt * CANDLE_MS;
+    const elapsedInCandle = elapsed - doneCnt * CANDLE_MS;
+    const open = getPriceAt(cs);
     const close = curPrice;
     let high = Math.max(open, close);
     let low = Math.min(open, close);
-    const elapsedInCandle = elapsed - currentCandleIdx * CANDLE_MS;
-    const steps = Math.max(2, Math.floor(elapsedInCandle / 500));
+    const steps = Math.max(2, Math.floor(elapsedInCandle / 300));
     for (let step = 0; step <= steps; step++) {
-      const p = getLivePrice(currentCandleStart + (elapsedInCandle / steps) * step);
+      const p = getPriceAt(cs + (elapsedInCandle / steps) * step);
       high = Math.max(high, p);
       low = Math.min(low, p);
     }
-    const spread = Math.max((high - low) * 0.2, close * 0.004);
-    liveCandles.push({ o: open, c: close, h: high + spread, l: Math.max(1, low - spread), done: false });
+    const tail = Math.max((high - low) * 0.2, close * 0.004);
+    liveCandles.push({ o: open, c: close, h: high + tail, l: Math.max(1, low - tail), done: false });
   } else {
-    liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice) * 1.01, l: Math.min(startPrice, curPrice) * 0.99, done: false });
+    liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice) * 1.008, l: Math.min(startPrice, curPrice) * 0.992, done: false });
   }
 
   const all = [...prevCandles, ...liveCandles];
+
   const allP = all.flatMap(c => [c.h, c.l]);
   const dMin = Math.min(...allP), dMax = Math.max(...allP);
   const pad = Math.max((dMax - dMin) * 0.1, dMin * 0.005);
   const minP = dMin - pad, maxP = dMax + pad, range = maxP - minP || 1;
 
-  const W = 320, H = 160;
-  const PL = 4, PR = 72, PT = 12, PB = 22;
+  const W = 340, H = 170;
+  const PL = 4, PR = 72, PT = 14, PB = 24;
   const cw = W - PL - PR, ch = H - PT - PB;
   const toY = v => Math.max(PT, Math.min(PT + ch, PT + ch - ((v - minP) / range) * ch));
 
@@ -671,9 +678,9 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
   const isUpNow = curPrice >= startPrice;
   const lc = isUpNow ? UP : DN;
 
-  const totalSlots = all.length + 0.5;
-  const slotW = cw / totalSlots;
-  const bw = Math.max(4, Math.min(16, slotW * 0.7));
+  const totalSlots = all.length;
+  const slotW = cw / (totalSlots + 0.5);
+  const bw = Math.max(5, Math.min(18, slotW * 0.75));
 
   const grids = [0, 1, 2, 3].map(i => {
     const v = minP + (range / 3) * i;
@@ -686,17 +693,35 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
       {grids.map((g, i) => (
         <g key={i}>
-          <line x1={PL} y1={g.y} x2={W - PR} y2={g.y} stroke={G.border} strokeWidth="0.6" strokeDasharray="3,4" />
-          <text x={W - PR + 3} y={g.y + 3.5} fontSize="8.5" fill={G.gray2} fontFamily="monospace">{g.label}</text>
+          <line x1={PL} y1={g.y} x2={W - PR} y2={g.y}
+            stroke={G.border} strokeWidth="0.6" strokeDasharray="3,4" />
+          <text x={W - PR + 3} y={g.y + 3.5} fontSize="8" fill={G.gray2} fontFamily="monospace">
+            {g.label}
+          </text>
         </g>
       ))}
 
       {prevCandles.length > 0 && (
         <line
-          x1={PL + prevCandles.length * slotW + slotW * 0.15} y1={PT - 4}
-          x2={PL + prevCandles.length * slotW + slotW * 0.15} y2={PT + ch + 2}
+          x1={PL + prevCandles.length * slotW + slotW * 0.1}
+          y1={PT - 4}
+          x2={PL + prevCandles.length * slotW + slotW * 0.1}
+          y2={PT + ch + 2}
           stroke={G.border} strokeWidth="0.8" strokeDasharray="3,2" />
       )}
+
+      {all.map((c, i) => {
+        if (i === 0) return null;
+        const prevC = all[i - 1];
+        const x1 = PL + slotW * (i - 1) + slotW / 2 + bw / 2;
+        const x2 = PL + slotW * i + slotW / 2 - bw / 2;
+        const y1 = toY(prevC.c);
+        const y2 = toY(c.o);
+        return (
+          <line key={`conn${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke={G.gray3} strokeWidth="0.8" strokeDasharray="2,2" />
+        );
+      })}
 
       {all.map((c, i) => {
         const x = PL + slotW * i + slotW / 2;
@@ -705,26 +730,20 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
         const bTop = toY(Math.max(c.o, c.c));
         const bBot = toY(Math.min(c.o, c.c));
         const bH = Math.max(bBot - bTop, 2);
-        const wTop = toY(c.h);
-        const wBot = toY(c.l);
+        const wTop = toY(c.h), wBot = toY(c.l);
         const lw = !c.done ? 2.2 : 1.6;
-
         return (
           <g key={i}>
-            <line x1={x} y1={wTop} x2={x} y2={bTop}
-              stroke={col} strokeWidth={lw} strokeLinecap="round" />
-            <line x1={x} y1={bBot} x2={x} y2={wBot}
-              stroke={col} strokeWidth={lw} strokeLinecap="round" />
-            <rect
-              x={x - bw / 2} y={bTop} width={bw} height={bH}
-              fill={col} stroke={col} strokeWidth={lw} rx={1.5}
-            />
+            <line x1={x} y1={wTop} x2={x} y2={bTop} stroke={col} strokeWidth={lw} strokeLinecap="round" />
+            <line x1={x} y1={bBot} x2={x} y2={wBot} stroke={col} strokeWidth={lw} strokeLinecap="round" />
+            <rect x={x - bw / 2} y={bTop} width={bw} height={bH}
+              fill={col} stroke={col} strokeWidth={lw} rx={1.5} />
           </g>
         );
       })}
 
       <line x1={PL} y1={toY(curPrice)} x2={W - PR} y2={toY(curPrice)}
-        stroke={lc} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.7" />
+        stroke={lc} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.8" />
 
       <rect x={W - PR + 2} y={toY(curPrice) - 9} width={PR - 4} height={18} fill={lc} rx={4} />
       <text x={W - PR + (PR - 4) / 2 + 2} y={toY(curPrice) + 4.5}
@@ -733,20 +752,26 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
       </text>
 
       {prevCandles.length > 0 && (
-        <text x={PL + (prevCandles.length / 2) * slotW} y={H - 5}
-          textAnchor="middle" fontSize="9" fill={G.gray2} fontFamily="inherit">R{round - 1}</text>
+        <text x={PL + (prevCandles.length / 2) * slotW} y={H - 6}
+          textAnchor="middle" fontSize="9" fill={G.gray2} fontFamily="inherit">
+          R{round - 1}
+        </text>
       )}
-      <text x={PL + (prevCandles.length + liveCandles.length / 2) * slotW} y={H - 5}
-        textAnchor="middle" fontSize="9.5" fill={lc} fontFamily="inherit" fontWeight="bold">R{round}</text>
+      <text
+        x={PL + (prevCandles.length + liveCandles.length / 2) * slotW}
+        y={H - 6}
+        textAnchor="middle" fontSize="9.5" fill={lc} fontFamily="inherit" fontWeight="bold">
+        R{round}
+      </text>
 
       {(() => {
-        const lastIdx = all.length - 1;
-        const lx = PL + slotW * lastIdx + slotW / 2;
-        return <circle cx={lx} cy={toY(curPrice)} r="3.5" fill={lc} opacity={blinkOp} />;
+        const lastX = PL + (all.length - 1) * slotW + slotW / 2;
+        return <circle cx={lastX} cy={toY(curPrice)} r="3.5" fill={lc} opacity={blinkOp} />;
       })()}
     </svg>
   );
 }
+
 
 
 
