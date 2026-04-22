@@ -71,7 +71,19 @@ const useShared = () => {
         if (val.priceHistory) {
           for (const sid of Object.keys(val.priceHistory)) {
             if (val.priceHistory[sid] && !Array.isArray(val.priceHistory[sid])) {
-              val.priceHistory[sid] = Object.values(val.priceHistory[sid]);
+              val.priceHistory[sid] = Object.values(val.priceHistory[sid])
+                .sort((a, b) => a.t - b.t);
+            }
+          }
+        }
+        if (val.teams) {
+          for (const tid of Object.keys(val.teams)) {
+            const tm = val.teams[tid];
+            if (tm.history && !Array.isArray(tm.history)) {
+              val.teams[tid].history = Object.values(tm.history).sort((a, b) => (a.t || 0) - (b.t || 0));
+            }
+            if (tm.purchases && !Array.isArray(tm.purchases)) {
+              val.teams[tid].purchases = Object.values(tm.purchases);
             }
           }
         }
@@ -356,92 +368,92 @@ function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent,
 
 // 자동 이벤트 타이머 + 가격 기록 훅
 function useAutoEventAndHistory(shared) {
+  const sharedRef = useRef(shared);
+  useEffect(() => { sharedRef.current = shared; }, [shared]);
+
   useEffect(() => {
     if (shared.phase !== "round") return;
 
-    const interval = setInterval(async () => {
+    const interval = setInterval(() => {
+      const s = sharedRef.current;
+      if (!s.roundStartedAt || s.phase !== "round") return;
       const now = Date.now();
-      if (!shared.roundStartedAt) return;
 
-      // ── 1. 가격 히스토리 기록 (2초마다) ──
-      const newHistory = {};
-      (shared.stocks || []).forEach(stock => {
+      // 1. priceHistory 기록 — stocks만 읽고 priceHistory만 씀
+      const newHistory = { ...(s.priceHistory || {}) };
+      let changed = false;
+      (s.stocks || []).forEach(stock => {
         const price = getCurrentPrice(
-          stock, shared.round,
-          shared.roundStartedAt, shared.roundEndsAt,
-          shared.activeEvent, shared.modifiedTargets
+          stock, s.round, s.roundStartedAt, s.roundEndsAt,
+          s.activeEvent, s.modifiedTargets
         );
-        const existing = Array.isArray(shared.priceHistory?.[stock.id])
-          ? shared.priceHistory[stock.id]
-          : [];
+        const existing = Array.isArray(s.priceHistory?.[stock.id])
+          ? s.priceHistory[stock.id] : [];
         newHistory[stock.id] = [...existing.slice(-299), { t: now, price }];
+        changed = true;
       });
 
-      // ── 2. 자동 이벤트 체크 ──
+      // 2. 자동 이벤트 체크
       let eventUpdate = {};
-      if (shared.nextAutoEventAt && now >= shared.nextAutoEventAt) {
-        const autoEvents = (shared.eventPresets || []).filter(e => e.autoTrigger);
+      if (s.nextAutoEventAt && now >= s.nextAutoEventAt) {
+        const autoEvents = (s.eventPresets || []).filter(e => e.autoTrigger);
         if (autoEvents.length > 0) {
           const triggered = autoEvents.filter(e => Math.random() * 100 < (e.probability || 50));
           const ev = triggered.length > 0
             ? triggered[Math.floor(Math.random() * triggered.length)]
             : null;
 
+          const pickNext = (ev2) => {
+            const minMs = ((ev2 || autoEvents[0]).triggerIntervalMin || 1) * 60 * 1000;
+            const maxMs = ((ev2 || autoEvents[0]).triggerIntervalMax || 3) * 60 * 1000;
+            return now + minMs + Math.random() * (maxMs - minMs);
+          };
+
           if (ev) {
-            const newMod = { ...(shared.modifiedTargets || {}) };
+            const newMod = { ...(s.modifiedTargets || {}) };
             if (ev.affectTarget !== false) {
-              (shared.stocks || []).forEach(stock => {
+              (s.stocks || []).forEach(stock => {
                 const eff = ev.stockEffects?.[stock.id] ?? ev.globalEffect ?? 0;
                 if (eff === 0) return;
-                const ri = Math.min(shared.round - 1, stock.prices.length - 1);
-                const base = newMod[stock.id]?.round === shared.round
-                  ? newMod[stock.id].modifiedPrice
-                  : stock.prices[ri];
+                const ri = Math.min(s.round - 1, stock.prices.length - 1);
+                const base = newMod[stock.id]?.round === s.round
+                  ? newMod[stock.id].modifiedPrice : stock.prices[ri];
                 newMod[stock.id] = {
-                  round: shared.round,
+                  round: s.round,
                   originalPrice: stock.prices[ri],
                   modifiedPrice: Math.max(Math.round(base * (1 + eff / 100)), 1),
                 };
               });
             }
-            const minMs = (ev.triggerIntervalMin || 1) * 60 * 1000;
-            const maxMs = (ev.triggerIntervalMax || 3) * 60 * 1000;
             eventUpdate = {
               activeEvent: { ...ev, appliedAt: now },
-              eventHistory: [...(shared.eventHistory || []), { ...ev, appliedAt: now }],
+              eventHistory: [...(s.eventHistory || []), { ...ev, appliedAt: now }],
               modifiedTargets: newMod,
-              nextAutoEventAt: now + minMs + Math.random() * (maxMs - minMs),
+              nextAutoEventAt: pickNext(ev),
             };
             if (ev.duration > 0) {
               setTimeout(() => {
-                setShared(s => ({ ...s, activeEvent: null }));
+                setShared(ss => ({ ...ss, activeEvent: null }));
               }, ev.duration * 1000);
             }
           } else {
-            const ev2 = autoEvents[0];
-            const minMs = (ev2.triggerIntervalMin || 1) * 60 * 1000;
-            const maxMs = (ev2.triggerIntervalMax || 3) * 60 * 1000;
-            eventUpdate = { nextAutoEventAt: now + minMs + Math.random() * (maxMs - minMs) };
+            eventUpdate = { nextAutoEventAt: pickNext(null) };
           }
         }
       }
 
-      // ── 3. 한 번에 저장 ──
-      setShared(s => ({
-        ...s,
-        priceHistory: newHistory,
-        ...eventUpdate,
-      }));
-
+      if (changed || Object.keys(eventUpdate).length > 0) {
+        // priceHistory와 eventUpdate만 업데이트 — teams 절대 안 건드림
+        setShared(ss => ({
+          ...ss,
+          priceHistory: newHistory,
+          ...eventUpdate,
+        }));
+      }
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [
-    shared.phase,
-    shared.round,
-    shared.roundStartedAt,
-    shared.nextAutoEventAt,
-  ]);
+  }, [shared.phase, shared.round, shared.roundStartedAt]);
 }
 
 /* ══════════════════════════════════════════
@@ -819,16 +831,21 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
 }
 
 
-function useRoundTimer(phase,roundEndsAt){
+function useRoundTimer(phase,roundEndsAt,isAdmin=false){
   const [rem,setRem]=useState(null);
   useEffect(()=>{
     if(phase!=="round"||!roundEndsAt){setRem(null);return;}
     const tick=()=>{
       const s=Math.max(0,Math.round((roundEndsAt-Date.now())/1000));
       setRem(s);
-      if(s<=0) setShared(ss=>({...ss,phase:"break",roundEndsAt:null,roundStartedAt:null}));
+      // phase 변경은 관리자에서만 — 팀장 화면 중복 방지
+      if(s<=0&&isAdmin){
+        setShared(ss=>({...ss,phase:"break",roundEndsAt:null,roundStartedAt:null}));
+      }
     };
-    tick();const id=setInterval(tick,1000);return()=>clearInterval(id);
+    tick();
+    const id=setInterval(tick,1000);
+    return()=>clearInterval(id);
   },[phase,roundEndsAt]);
   return rem;
 }
@@ -1706,18 +1723,22 @@ function UserApp(){
   const t2=msg=>showToast(setToast,msg);
 
   useEffect(() => {
+    if (screen !== "login") return;
+    if (!shared.teams || Object.keys(shared.teams).length === 0) return;
     try {
       const saved = sessionStorage.getItem('sg_session');
       if (saved) {
         const { id, name } = JSON.parse(saved);
-        if (id && name && shared.teams?.[id]) {
+        if (id && name && shared.teams[id]) {
           setTeamId(id);
           setTeamName(name);
           setScreen("main");
+        } else {
+          sessionStorage.removeItem('sg_session');
         }
       }
     } catch(e) {}
-  }, [shared.teams]);
+  }, [shared.teams, screen]);
 
   useEffect(() => {
     if (screen === "ended") {
@@ -1776,7 +1797,7 @@ function UserApp(){
     setTeamId(cred.id);setTeamName(name);setLoginErr("");setScreen("main");
   };
 
-  const updTeam=fn=>setShared(s=>{
+  const updTeam=async(fn)=>setShared(s=>{
     const cur=s.teams?.[teamId]||{name:teamName,cash:s.initCash||DEFAULT_INIT_CASH,holdings:{},purchases:[],history:[],borrowed:0};
     return{...s,teams:{...s.teams,[teamId]:fn(cur)}};
   });
@@ -1785,7 +1806,7 @@ function UserApp(){
   const effectiveQty=qty*leverage;
   const feeAmt=Math.round(orderPrice*effectiveQty*feeRate/100);
 
-  const doOrder=()=>{
+  const doOrder=async()=>{
     if(shared.phase!=="round"){t2("현재 매매 시간이 아닙니다");setConfirm(false);return;}
     const s=detail;
     const cur=orderPrice;
@@ -1802,7 +1823,7 @@ function UserApp(){
         const allHeld=Object.values(shared.teams||{}).reduce((acc,tm)=>acc+(tm.holdings?.[s.id]?.qty||0),0);
         if(allHeld+effectiveQty>si.totalSupply){t2(`최대 ${si.totalSupply-allHeld}주 구매 가능`);setConfirm(false);return;}
       }
-      updTeam(t=>{
+      await updTeam(t=>{
         const h=t.holdings?.[s.id]||{qty:0,avgPrice:0};
         const nq=h.qty+effectiveQty,na=Math.round((h.avgPrice*h.qty+cur*effectiveQty)/nq);
         const rec={time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
@@ -1817,7 +1838,7 @@ function UserApp(){
       if(!h||h.qty<effectiveQty){t2("보유 수량 부족");setConfirm(false);return;}
       const proceeds=cost-feeAmt;
       const repay=Math.min(borrowed,cost*((leverage-1)/leverage)||0);
-      updTeam(t=>{
+      await updTeam(t=>{
         const newQty=(t.holdings?.[s.id]?.qty||0)-effectiveQty;
         const rec={time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
           type:'sell',stockName:s.name,stockEmoji:s.emoji,qty:effectiveQty,price:cur,total:cost};
@@ -1830,11 +1851,11 @@ function UserApp(){
     setQty(1);setLeverage(1);setConfirm(false);
   };
 
-  const buyShop=item=>{
+  const buyShop=async(item)=>{
     const latest=(shared.shopItems||[]).find(x=>x.id===item.id)||item;
     if(purchases.includes(latest.id)){t2("이미 구매한 항목");return;}
     if(cash<latest.price){t2("잔액 부족");return;}
-    updTeam(t=>({...t,cash:t.cash-latest.price,purchases:[...(t.purchases||[]),latest.id]}));
+    await updTeam(t=>({...t,cash:t.cash-latest.price,purchases:[...(t.purchases||[]),latest.id]}));
     t2(`${latest.name} 구매 완료!`);
   };
 
