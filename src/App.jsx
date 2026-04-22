@@ -888,22 +888,21 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
 }
 
 
-function useRoundTimer(phase,roundEndsAt,isAdmin=false){
-  const [rem,setRem]=useState(null);
-  useEffect(()=>{
-    if(phase!=="round"||!roundEndsAt){setRem(null);return;}
-    const tick=()=>{
-      const s=Math.max(0,Math.round((roundEndsAt-Date.now())/1000));
+function useRoundTimer(phase, roundEndsAt) {
+  const [rem, setRem] = useState(null);
+  useEffect(() => {
+    if (phase !== "round" || !roundEndsAt) { setRem(null); return; }
+    const tick = () => {
+      const s = Math.max(0, Math.round((roundEndsAt - Date.now()) / 1000));
       setRem(s);
-      // phase 변경은 관리자에서만 — 팀장 화면 중복 방지
-      if(s<=0&&isAdmin){
-        setShared(ss=>({...ss,phase:"break",roundEndsAt:null,roundStartedAt:null}));
+      if (s <= 0) {
+        setShared(ss => ({ ...ss, phase: "break", roundEndsAt: null, roundStartedAt: null }));
       }
     };
     tick();
-    const id=setInterval(tick,1000);
-    return()=>clearInterval(id);
-  },[phase,roundEndsAt]);
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [phase, roundEndsAt]);
   return rem;
 }
 
@@ -2243,16 +2242,11 @@ function UserApp(){
               <div style={{fontSize:13,fontWeight:600,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"▲ +":"▼ "}{p.toFixed(2)}%</div>
             </div>
           )}
-          {(() => {
-            const isActive = shared.phase === "round"
-              && shared.roundEndsAt
-              && Date.now() < shared.roundEndsAt;
-            if (isActive) return null;
-            if (shared.phase === "round" && shared.roundEndsAt && Date.now() >= shared.roundEndsAt) {
-              return <div style={{ marginTop: 4, fontSize: 12, color: G.orange, fontWeight: 500 }}>🟡 라운드 종료 처리 중...</div>;
-            }
-            return <div style={{ marginTop: 4, fontSize: 12, color: G.red, fontWeight: 500 }}>🔴 매매 시간이 아닙니다</div>;
-          })()}
+          {shared.phase !== "round" && (
+            <div style={{ marginTop: 4, fontSize: 12, color: G.red, fontWeight: 500 }}>
+              🔴 매매 시간이 아닙니다
+            </div>
+          )}
           {st.listed===false&&<div style={{marginTop:4,fontSize:12,color:G.red,fontWeight:500}}>⛔ 폐지된 종목입니다</div>}
         </div>
         <div style={{paddingBottom:"env(safe-area-inset-bottom, 100px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
