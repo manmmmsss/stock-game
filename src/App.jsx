@@ -382,17 +382,40 @@ function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent,
   const now = Date.now();
   const total = roundEndsAt - roundStartedAt;
   const t = Math.min(Math.max((now - roundStartedAt) / total, 0), 1);
+
+  // 기본 선형 보간 (시작가 → 목표가)
   const base = prev + (target - prev) * t;
 
-  // 노이즈 시드를 3초 단위로 고정 (화면 가격과 차트 가격 일치)
+  // ── 랜덤워크 누적 노이즈 ──
+  // 3초 단위 슬롯으로 나눠서 각 슬롯마다 독립적인 방향성 부여
   const sid = stock.id?.charCodeAt(0) || 1;
   const sid2 = stock.id?.charCodeAt(1) || 2;
-  const s1 = Math.floor(now / 3000);
-  const s2 = Math.floor(now / 1200);
-  const n = Math.sin(s1 * 9301 + sid * 49297) * 0.6
-          + Math.sin(s2 * 6271 + sid2 * 31337) * 0.4;
-  const nr = Math.abs(target - prev) * 0.12 + base * 0.015;
-  let price = Math.round(base + n * nr);
+  const SLOT_MS = 3000;
+  const currentSlot = Math.floor((now - roundStartedAt) / SLOT_MS);
+  const totalSlots = Math.ceil(total / SLOT_MS);
+
+  // 각 슬롯의 누적 랜덤워크 계산 (시드 기반 재현 가능)
+  let walk = 0;
+  for (let i = 0; i <= Math.min(currentSlot, totalSlots); i++) {
+    const slotSeed = (sid * 1664525 + sid2 * 1013904223 + i * 22695477 + roundStartedAt) & 0x7fffffff;
+    // -1 ~ +1 사이 값 (슬롯마다 다른 방향)
+    const dir = ((slotSeed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff * 2 - 1;
+    walk += dir;
+  }
+
+  // 슬롯 내 세밀한 진동 (짧은 주기)
+  const slotSeed2 = (sid * 22695477 + currentSlot * 1664525 + roundStartedAt) & 0x7fffffff;
+  const fine = Math.sin(now * 0.0031 + slotSeed2 * 0.0001) * 0.3
+             + Math.sin(now * 0.0071 + slotSeed2 * 0.0002) * 0.2;
+
+  // 랜덤워크 정규화 (슬롯 수에 따라 스케일 조정)
+  const walkNorm = walk / Math.sqrt(Math.max(currentSlot + 1, 1));
+
+  // 노이즈 크기: 시작가-목표가 차이의 25% + 현재가의 1.5%
+  const noiseRange = Math.abs(target - prev) * 0.25 + base * 0.015;
+
+  // 최종 가격 = 보간 기본값 + 랜덤워크 + 세밀한 진동
+  let price = Math.round(base + walkNorm * noiseRange * 0.7 + fine * noiseRange * 0.3);
 
   if (activeEvent) {
     const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
@@ -632,25 +655,37 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
 
   const CANDLE_MS = 15000; // 15초마다 캔들 확정
 
-  // 특정 과거 시각의 가격 — getCurrentPrice와 동일한 공식
+  // getCurrentPrice와 동일한 공식으로 특정 과거 시각의 가격 계산
+  const mod = modifiedTargets?.[stock.id];
+  const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
+
   const getPriceAt = (atTs) => {
-    if (!roundStartedAt || !roundEndsAt) return stock.prices[ri];
-    const ri2 = Math.min(round - 1, stock.prices.length - 1);
-    const mod = modifiedTargets?.[stock.id];
-    const target2 = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri2];
-    const prev2 = ri2 > 0 ? stock.prices[ri2 - 1] : stock.prices[0];
+    if (!roundStartedAt || !roundEndsAt) return target;
     const total = roundEndsAt - roundStartedAt;
     const t = Math.min(Math.max((atTs - roundStartedAt) / total, 0), 1);
-    const base = prev2 + (target2 - prev2) * t;
+    const base = startPrice + (target - startPrice) * t;
+
     const sid = stock.id?.charCodeAt(0) || 1;
     const sid2 = stock.id?.charCodeAt(1) || 2;
-    // 시드를 3000ms 단위로 고정 — getCurrentPrice와 동일
-    const s1 = Math.floor(atTs / 3000);
-    const s2 = Math.floor(atTs / 1200);
-    const n = Math.sin(s1 * 9301 + sid * 49297) * 0.6
-            + Math.sin(s2 * 6271 + sid2 * 31337) * 0.4;
-    const nr = Math.abs(target2 - prev2) * 0.12 + base * 0.015;
-    let p = Math.round(base + n * nr);
+    const SLOT_MS = 3000;
+    const currentSlot = Math.floor((atTs - roundStartedAt) / SLOT_MS);
+    const totalSlots = Math.ceil(total / SLOT_MS);
+
+    let walk = 0;
+    for (let i = 0; i <= Math.min(currentSlot, totalSlots); i++) {
+      const slotSeed = (sid * 1664525 + sid2 * 1013904223 + i * 22695477 + roundStartedAt) & 0x7fffffff;
+      const dir = ((slotSeed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff * 2 - 1;
+      walk += dir;
+    }
+
+    const slotSeed2 = (sid * 22695477 + currentSlot * 1664525 + roundStartedAt) & 0x7fffffff;
+    const fine = Math.sin(atTs * 0.0031 + slotSeed2 * 0.0001) * 0.3
+               + Math.sin(atTs * 0.0071 + slotSeed2 * 0.0002) * 0.2;
+
+    const walkNorm = walk / Math.sqrt(Math.max(currentSlot + 1, 1));
+    const noiseRange = Math.abs(target - startPrice) * 0.25 + base * 0.015;
+    let p = Math.round(base + walkNorm * noiseRange * 0.7 + fine * noiseRange * 0.3);
+
     if (activeEvent) {
       const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
       p = Math.round(p * (1 + eff / 100));
