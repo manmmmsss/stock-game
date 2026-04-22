@@ -68,10 +68,25 @@ const setShared = async (fn, opts = {}) => {
             ...tm,
             holdings: (() => {
               const base = current.teams[tid]?.holdings || {};
-              const cleaned = Object.fromEntries(
-                Object.entries(base).filter(([k]) => k !== '_empty')
-              );
-              return { ...cleaned, ...(tm.holdings || {}) };
+              const cleaned = {};
+              for (const [sid, h] of Object.entries(base)) {
+                if (sid === '_empty') continue;
+                if (h && typeof h === 'object') {
+                  cleaned[sid] = { qty: h.qty ?? 0, avgPrice: h.avgPrice ?? 0 };
+                }
+              }
+              const incoming = tm.holdings || {};
+              const result = { ...cleaned };
+              for (const [sid, h] of Object.entries(incoming)) {
+                if (sid === '_empty') continue;
+                if (h && typeof h === 'object') {
+                  result[sid] = {
+                    qty: h.qty ?? cleaned[sid]?.qty ?? 0,
+                    avgPrice: h.avgPrice ?? cleaned[sid]?.avgPrice ?? 0,
+                  };
+                }
+              }
+              return result;
             })(),
             history: Array.isArray(tm.history)
               ? tm.history
@@ -145,8 +160,24 @@ const useShared = () => {
         if (val.teams) {
           for (const tid of Object.keys(val.teams)) {
             const tm = val.teams[tid];
-            if (tm.holdings?._empty) {
-              val.teams[tid].holdings = {};
+            if (tm.holdings) {
+              if (tm.holdings._empty === true) {
+                // 초기화된 경우
+                val.teams[tid].holdings = {};
+              } else {
+                // Firebase가 객체로 저장한 holdings — avgPrice 보존하며 복원
+                const cleanHoldings = {};
+                for (const [sid, h] of Object.entries(tm.holdings)) {
+                  if (sid === '_empty') continue;
+                  if (h && typeof h === 'object') {
+                    cleanHoldings[sid] = {
+                      qty: h.qty ?? 0,
+                      avgPrice: h.avgPrice ?? 0,
+                    };
+                  }
+                }
+                val.teams[tid].holdings = cleanHoldings;
+              }
             }
             if (Array.isArray(tm.purchases)) {
               val.teams[tid].purchases = tm.purchases.filter(x => x !== "_empty");
@@ -426,9 +457,22 @@ function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent,
   const mod = modifiedTargets?.[stock.id];
   const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
   const prev = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
-  if (!roundStartedAt || !roundEndsAt) return target;
+  // 라운드 대기중/종료 후 → 이전 라운드 종가 표시
+  if (!roundStartedAt || !roundEndsAt) {
+    return ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+  }
 
+  // 라운드 진행 중
   const now = Date.now();
+  if (now < roundStartedAt) {
+    // 라운드 시작 전 → 이전 라운드 종가
+    return prev;
+  }
+  if (now > roundEndsAt) {
+    // 라운드 종료 후 → 목표가(종가) 반환
+    return target;
+  }
+
   const total = roundEndsAt - roundStartedAt;
   const t = Math.min(Math.max((now - roundStartedAt) / total, 0), 1);
 
@@ -709,6 +753,30 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
   );
 
   const ri = Math.min(round - 1, stock.prices.length - 1);
+
+  // 라운드 진행 중이 아닐 때 — 심플한 종가 표시
+  if (!roundStartedAt || !roundEndsAt) {
+    const displayPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+    return (
+      <div ref={containerRef} style={{ padding: "20px 0", textAlign: "center",
+        background: G.bg, borderRadius: 12 }}>
+        <div style={{ fontSize: 12, color: G.gray2, marginBottom: 6 }}>
+          {ri > 0 ? `R${ri} 종가` : "시작가"}
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: G.black }}>
+          {fmtN(displayPrice)}
+        </div>
+        {avgPrice > 0 && (
+          <div style={{ fontSize: 12, color: G.purple, marginTop: 6 }}>
+            평단가 {fmtN(avgPrice)} ({displayPrice >= avgPrice ? "▲" : "▼"} {Math.abs(((displayPrice - avgPrice) / avgPrice) * 100).toFixed(2)}%)
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: G.gray2, marginTop: 4 }}>
+          다음 라운드 시작 대기 중...
+        </div>
+      </div>
+    );
+  }
   const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
   const target = modifiedTargets?.[stock.id]?.round === round
     ? modifiedTargets[stock.id].modifiedPrice : stock.prices[ri];
@@ -2423,7 +2491,13 @@ function UserApp(){
   if(screen==="detail"&&detail){
     const st=detail;
     const cur=isBlind?null:getLivePrice(st);
-    const displayPrice=isBlind?st.prices[Math.min(round-2,st.prices.length-1)]:cur;
+    // 대기 중이거나 블라인드면 이전 라운드 종가 표시
+    const ri2 = Math.min(round - 1, st.prices.length - 1);
+    const displayPrice = isBlind
+      ? st.prices[Math.max(ri2 - 1, 0)]
+      : shared.phase !== "round"
+        ? (ri2 > 0 ? st.prices[ri2 - 1] : st.prices[0])
+        : cur;
     const prev=round<=1?st.prices[0]:st.prices[Math.min(round-2,st.prices.length-1)];
     const p=isBlind?0:pctOf(cur,prev),isUp=p>0;
     const h=holdings[st.id];
