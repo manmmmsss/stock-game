@@ -50,7 +50,31 @@ const setShared = async (fn) => {
     const snapshot = await get(GAME_REF);
     const current = snapshot.val() || { ...INIT_SS };
     const next = fn(current);
+
+    // teams는 딥머지 (개별 팀 데이터 보존)
     const merged = { ...current, ...next };
+    if (next.teams && current.teams) {
+      merged.teams = { ...current.teams };
+      for (const [tid, tm] of Object.entries(next.teams)) {
+        merged.teams[tid] = {
+          ...(current.teams[tid] || {}),
+          ...tm,
+          holdings: { ...(current.teams[tid]?.holdings || {}), ...(tm.holdings || {}) },
+          history: Array.isArray(tm.history) ? tm.history : (current.teams[tid]?.history || []),
+          purchases: Array.isArray(tm.purchases) ? tm.purchases : (current.teams[tid]?.purchases || []),
+        };
+      }
+    }
+
+    // chatMessages 배열 보존
+    if (next.chatMessages && Array.isArray(next.chatMessages)) {
+      merged.chatMessages = next.chatMessages;
+    } else if (!next.hasOwnProperty('chatMessages')) {
+      merged.chatMessages = Array.isArray(current.chatMessages)
+        ? current.chatMessages
+        : Object.values(current.chatMessages || {}).sort((a, b) => a.ts - b.ts);
+    }
+
     await fbSet(GAME_REF, removeUndefined(merged));
   } catch(e) {
     console.error("Firebase setShared error:", e);
@@ -87,11 +111,16 @@ const useShared = () => {
           for (const tid of Object.keys(val.teams)) {
             const tm = val.teams[tid];
             if (tm.history && !Array.isArray(tm.history)) {
-              val.teams[tid].history = Object.values(tm.history).sort((a, b) => (a.t || 0) - (b.t || 0));
+              val.teams[tid].history = Object.values(tm.history)
+                .sort((a, b) => (a.ts || a.t || 0) - (b.ts || b.t || 0));
             }
+            if (!tm.history) val.teams[tid].history = [];
             if (tm.purchases && !Array.isArray(tm.purchases)) {
               val.teams[tid].purchases = Object.values(tm.purchases);
             }
+            if (!tm.purchases) val.teams[tid].purchases = [];
+            if (!tm.holdings) val.teams[tid].holdings = {};
+            if (tm.borrowed === undefined) val.teams[tid].borrowed = 0;
           }
         }
         set(val);
@@ -449,12 +478,13 @@ function useAutoEventAndHistory(shared) {
       }
 
       if (changed || Object.keys(eventUpdate).length > 0) {
-        // priceHistory와 eventUpdate만 업데이트 — teams 절대 안 건드림
-        setShared(ss => ({
-          ...ss,
-          priceHistory: newHistory,
-          ...eventUpdate,
-        }));
+        setShared(ss => {
+          // teams는 건드리지 않고 priceHistory + event만 업데이트
+          const result = { ...ss, priceHistory: newHistory, ...eventUpdate };
+          // teams 보존 명시
+          if (ss.teams) result.teams = ss.teams;
+          return result;
+        });
       }
     }, 2000);
 
@@ -900,6 +930,7 @@ function AdminApp(){
       feeRate: tpl.feeRate ?? 0.1,
       leverageEnabled: tpl.leverageEnabled ?? false,
       leverageMax: tpl.leverageMax ?? 2,
+      customTemplates: ss.customTemplates || [],
     }));
 
     t2(`"${tpl.name}" 적용 완료 ✓`);
@@ -1004,8 +1035,17 @@ function AdminApp(){
             const qty=tm.holdings?.[sid]?.qty||0;
             bonus+=qty*perShare;
           }
-          if(bonus>0) teams[tid]={...tm,cash:tm.cash+bonus,
-            history:[...(tm.history||[]),{time:new Date().toLocaleTimeString('ko-KR'),type:'dividend',stockName:'배당금',stockEmoji:'💰',qty:0,price:0,total:bonus}]};
+          if(bonus>0) {
+            const existingHistory = Array.isArray(tm.history)
+              ? tm.history
+              : Object.values(tm.history || {});
+            teams[tid]={...tm, cash:tm.cash+bonus,
+              history:[...existingHistory,{
+                time:new Date().toLocaleTimeString('ko-KR'),
+                type:'dividend',stockName:'배당금',
+                stockEmoji:'💰',qty:0,price:0,total:bonus
+              }]};
+          }
         }
         return{...s,phase:"break",roundEndsAt:null,roundStartedAt:null,teams};
       });
@@ -1065,6 +1105,8 @@ function AdminApp(){
       }
       return{...s,phase:"ready",round:0,roundStartedAt:null,roundEndsAt:null,
         activeEvent:null,eventHistory:[],notice:"",noticeAt:null,bonusPool:{},
+        priceHistory:{},modifiedTargets:{},nextAutoEventAt:null,
+        chatMessages:[],tradeOffers:{},
         teams:freshTeams};
     });
     t2("게임 초기화 ✓ (설정·팀 유지)");
@@ -1847,9 +1889,26 @@ function UserApp(){
     setTeamId(cred.id);setTeamName(name);setLoginErr("");setScreen("main");
   };
 
-  const updTeam=async(fn)=>setShared(s=>{
-    const cur=s.teams?.[teamId]||{name:teamName,cash:s.initCash||DEFAULT_INIT_CASH,holdings:{},purchases:[],history:[],borrowed:0};
-    return{...s,teams:{...s.teams,[teamId]:fn(cur)}};
+  const updTeam = async (fn) => setShared(s => {
+    const rawTeam = s.teams?.[teamId];
+    const cur = {
+      name: teamName,
+      cash: s.initCash || DEFAULT_INIT_CASH,
+      holdings: {},
+      purchases: [],
+      history: [],
+      borrowed: 0,
+      ...(rawTeam || {}),
+      // 배열 보장
+      history: Array.isArray(rawTeam?.history)
+        ? rawTeam.history
+        : Object.values(rawTeam?.history || {}),
+      purchases: Array.isArray(rawTeam?.purchases)
+        ? rawTeam.purchases
+        : Object.values(rawTeam?.purchases || []),
+    };
+    const updated = fn(cur);
+    return { ...s, teams: { ...s.teams, [teamId]: updated } };
   });
 
   const orderPrice=detail?(isBlind?detail.prices[Math.min(round-1,detail.prices.length-1)]:getLivePrice(detail)):0;
@@ -1868,6 +1927,11 @@ function UserApp(){
     }
     const s=detail;
     const cur=orderPrice;
+    if (!cur || cur <= 0) {
+      t2("가격 정보를 불러오는 중입니다");
+      setConfirm(false);
+      return;
+    }
     const cost=cur*effectiveQty;
     const totalCost=cost+(orderSide==="buy"?feeAmt:-feeAmt);
 
@@ -1972,6 +2036,10 @@ function UserApp(){
       const buyerHolding = buyerTeam?.holdings?.[offer.stockId] || { qty: 0, avgPrice: 0 };
       const newBuyerQty = buyerHolding.qty + offer.qty;
       const newBuyerAvg = Math.round((buyerHolding.avgPrice * buyerHolding.qty + offer.price * offer.qty) / newBuyerQty);
+      const sellerHistory = Array.isArray(seller.history)
+        ? seller.history : Object.values(seller.history || {});
+      const buyerHistory = Array.isArray(buyerTeam.history)
+        ? buyerTeam.history : Object.values(buyerTeam.history || {});
       return {
         ...s,
         tradeOffers: { ...(s.tradeOffers || {}), [offer.id]: { ...offer, status: "accepted", acceptedBy: teamName } },
@@ -1981,11 +2049,21 @@ function UserApp(){
             ...seller,
             cash: seller.cash + offer.price * offer.qty,
             holdings: { ...seller.holdings, [offer.stockId]: { ...sellerHolding, qty: sellerHolding.qty - offer.qty } },
+            history: [...sellerHistory, {
+              time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+              type: 'sell', stockName: offer.stockName, stockEmoji: offer.stockEmoji,
+              qty: offer.qty, price: offer.price, total: offer.price * offer.qty,
+            }],
           },
           [teamId]: {
             ...buyerTeam,
             cash: buyerTeam.cash - offer.price * offer.qty,
             holdings: { ...buyerTeam.holdings, [offer.stockId]: { qty: newBuyerQty, avgPrice: newBuyerAvg } },
+            history: [...buyerHistory, {
+              time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+              type: 'buy', stockName: offer.stockName, stockEmoji: offer.stockEmoji,
+              qty: offer.qty, price: offer.price, total: offer.price * offer.qty,
+            }],
           },
         },
         chatMessages: [...(Array.isArray(s.chatMessages) ? s.chatMessages : []), systemMsg].slice(-200),
