@@ -76,6 +76,10 @@ const useShared = () => {
             }
           }
         }
+        if (val.chatMessages && !Array.isArray(val.chatMessages)) {
+          val.chatMessages = Object.values(val.chatMessages)
+            .sort((a, b) => a.ts - b.ts);
+        }
         if (val.teams) {
           for (const tid of Object.keys(val.teams)) {
             const tm = val.teams[tid];
@@ -326,6 +330,7 @@ const INIT_SS={
   modifiedTargets: {},
   nextAutoEventAt: null,
   priceHistory: {},
+  chatMessages: [],
 };
 
 
@@ -991,6 +996,7 @@ function AdminApp(){
   const [selTeam,setSelTeam]=useState(null);
   const [bonusIn,setBonusIn]=useState({});
   const [noticeInput,setNoticeInput]=useState("");
+  const [adminChatInput,setAdminChatInput]=useState("");
   const [newTeamName,setNewTeamName]=useState("");
   const [newTeamPw,setNewTeamPw]=useState("");
   const [saveTplName,setSaveTplName]=useState("");
@@ -1241,6 +1247,30 @@ function AdminApp(){
               <span>{shared.notice}</span>
               <span onClick={()=>{setShared(s=>({...s,notice:"",noticeAt:null}));setNoticeInput("");}} style={{cursor:"pointer",color:G.red,marginLeft:8}}>×</span>
             </div>}
+          </div>
+
+          {/* 채팅 전송 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💬 채팅 전송</div>
+            <div style={{display:"flex",gap:8}}>
+              <TextInput
+                value={adminChatInput}
+                onChange={e=>setAdminChatInput(e.target.value)}
+                placeholder="운영자로 채팅 전송"
+                style={{flex:1}}
+              />
+              <Btn onClick={()=>{
+                const text=adminChatInput.trim();
+                if(!text) return;
+                const msg={id:uid(),teamName:"🛠 운영자",text,ts:Date.now()};
+                setShared(s=>({
+                  ...s,
+                  chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200),
+                }));
+                setAdminChatInput("");
+                t2("채팅 전송됨");
+              }} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
+            </div>
           </div>
 
           {/* 현재 상태 */}
@@ -1837,6 +1867,11 @@ function UserApp(){
   const [confirm,setConfirm]=useState(false);
   const [toast,setToast]=useState({msg:"",show:false});
   const t2=msg=>showToast(setToast,msg);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  const chatBottomRef = useRef(null);
+  const lastReadTs = useRef(0);
 
   useEffect(() => {
     if (screen !== "login") return;
@@ -1867,6 +1902,29 @@ function UserApp(){
     if((screen==="main"||screen==="detail")&&shared.phase==="ended") setScreen("ended");
     if(screen==="ended"&&(shared.phase==="ready"||shared.phase==="round")) setScreen("main");
   },[shared.phase]);
+
+  useEffect(() => {
+    if (chatOpen) {
+      setUnreadCount(0);
+      lastReadTs.current = Date.now();
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
+  }, [chatOpen]);
+
+  useEffect(() => {
+    const msgs = shared.chatMessages || [];
+    if (!chatOpen && msgs.length > 0) {
+      const newMsgs = msgs.filter(m => m.ts > lastReadTs.current && m.teamName !== teamName);
+      setUnreadCount(newMsgs.length);
+    }
+    if (chatOpen) {
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
+  }, [shared.chatMessages]);
 
   const myTeam=teamId?shared.teams?.[teamId]:null;
   const initCash=shared.initCash||DEFAULT_INIT_CASH;
@@ -1973,6 +2031,17 @@ function UserApp(){
     if(cash<latest.price){t2("잔액 부족");return;}
     await updTeam(t=>({...t,cash:t.cash-latest.price,purchases:[...(t.purchases||[]),latest.id]}));
     t2(`${latest.name} 구매 완료!`);
+  };
+
+  const sendChat = () => {
+    const text = chatInput.trim();
+    if (!text || !teamName) return;
+    const msg = { id: uid(), teamName, text, ts: Date.now() };
+    setShared(s => ({
+      ...s,
+      chatMessages: [...(Array.isArray(s.chatMessages) ? s.chatMessages : []), msg].slice(-200),
+    }));
+    setChatInput("");
   };
 
   const total=totalAsset(),diff=total-initCash,diffPct=((diff/initCash)*100).toFixed(2);
@@ -2353,6 +2422,138 @@ function UserApp(){
           })}
         </>}
       </div>
+      {/* ── 채팅 플로팅 버튼 ── */}
+      {screen === "main" && (
+        <>
+          {chatOpen && (
+            <div style={{
+              position: "fixed", bottom: 80, right: 16,
+              width: 300, height: 420,
+              background: G.white,
+              borderRadius: 18,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              display: "flex", flexDirection: "column",
+              zIndex: 200,
+              overflow: "hidden",
+              border: `1px solid ${G.border}`,
+              maxWidth: "calc(100vw - 32px)",
+            }}>
+              <div style={{
+                background: G.blue, color: G.white,
+                padding: "12px 16px",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                flexShrink: 0,
+              }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>💬 팀 채팅</div>
+                <div onClick={() => setChatOpen(false)}
+                  style={{ cursor: "pointer", fontSize: 18, lineHeight: 1, opacity: 0.8 }}>×</div>
+              </div>
+              <div style={{
+                flex: 1, overflowY: "auto", padding: "10px 12px",
+                display: "flex", flexDirection: "column", gap: 6,
+              }}>
+                {(shared.chatMessages || []).length === 0 && (
+                  <div style={{ textAlign: "center", color: G.gray2, fontSize: 12, marginTop: 40 }}>
+                    아직 메시지가 없어요<br/>먼저 인사해보세요 👋
+                  </div>
+                )}
+                {(shared.chatMessages || []).map(msg => {
+                  const isMine = msg.teamName === teamName;
+                  return (
+                    <div key={msg.id} style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: isMine ? "flex-end" : "flex-start",
+                    }}>
+                      {!isMine && (
+                        <div style={{ fontSize: 10, color: G.gray2, marginBottom: 2, marginLeft: 4 }}>
+                          {msg.teamName}
+                        </div>
+                      )}
+                      <div style={{
+                        maxWidth: "80%",
+                        background: isMine ? G.blue : G.bg,
+                        color: isMine ? G.white : G.black,
+                        borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                        padding: "8px 12px",
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        wordBreak: "break-all",
+                      }}>
+                        {msg.text}
+                      </div>
+                      <div style={{ fontSize: 9, color: G.gray2, marginTop: 2, marginLeft: isMine ? 0 : 4, marginRight: isMine ? 4 : 0 }}>
+                        {new Date(msg.ts).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatBottomRef} />
+              </div>
+              <div style={{
+                padding: "10px 12px",
+                borderTop: `1px solid ${G.border}`,
+                display: "flex", gap: 8, flexShrink: 0,
+                background: G.white,
+              }}>
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                  placeholder="메시지 입력..."
+                  maxLength={100}
+                  style={{
+                    flex: 1, border: `1.5px solid ${G.border}`, borderRadius: 10,
+                    padding: "8px 12px", fontSize: 13, fontFamily: "inherit",
+                    outline: "none", color: G.black,
+                  }}
+                />
+                <div onClick={sendChat}
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    background: chatInput.trim() ? G.blue : G.gray3,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: chatInput.trim() ? "pointer" : "default",
+                    fontSize: 16, flexShrink: 0,
+                    transition: "background .15s",
+                  }}>
+                  ➤
+                </div>
+              </div>
+            </div>
+          )}
+          <div
+            onClick={() => { setChatOpen(o => !o); setUnreadCount(0); lastReadTs.current = Date.now(); }}
+            style={{
+              position: "fixed", bottom: 24, right: 16,
+              width: 52, height: 52,
+              borderRadius: "50%",
+              background: chatOpen ? G.gray1 : G.blue,
+              boxShadow: "0 4px 16px rgba(49,130,246,0.35)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", zIndex: 201,
+              transition: "background .2s, transform .15s",
+              fontSize: 22,
+            }}
+            onMouseDown={e => e.currentTarget.style.transform = "scale(0.9)"}
+            onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+          >
+            {chatOpen ? "×" : "💬"}
+            {!chatOpen && unreadCount > 0 && (
+              <div style={{
+                position: "absolute", top: 2, right: 2,
+                width: 18, height: 18, borderRadius: "50%",
+                background: G.red, color: G.white,
+                fontSize: 10, fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: "2px solid white",
+              }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </div>
+            )}
+          </div>
+        </>
+      )}
       <Toast {...toast}/>
     </div>
   );
