@@ -550,9 +550,9 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 
 /* ── 캔들스틱 차트 ── */
 function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, priceHistory }) {
-  const [, tick] = useState(0);
+  const [ts, setTs] = useState(Date.now());
   useEffect(() => {
-    const id = setInterval(() => tick(t => t + 1), 500);
+    const id = setInterval(() => setTs(Date.now()), 600);
     return () => clearInterval(id);
   }, []);
 
@@ -566,10 +566,30 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
   );
 
   const ri = Math.min(round - 1, stock.prices.length - 1);
-  const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
   const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
 
-  // ── 이전 라운드 캔들 ──
+  const curPrice = (() => {
+    if (!roundStartedAt || !roundEndsAt) return stock.prices[ri] ?? startPrice;
+    const total = roundEndsAt - roundStartedAt;
+    const t = Math.min(Math.max((ts - roundStartedAt) / total, 0), 1);
+    const target = modifiedTargets?.[stock.id]?.round === round
+      ? modifiedTargets[stock.id].modifiedPrice
+      : stock.prices[ri];
+    const base = startPrice + (target - startPrice) * t;
+    const s1 = Math.floor(ts / 2000);
+    const s2 = Math.floor(ts / 800);
+    const n = Math.sin(s1 * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.55
+            + Math.sin(s2 * 6271 + (stock.id?.charCodeAt(1) || 2) * 31337) * 0.3
+            + Math.sin(Math.floor(ts / 400) * 3847) * 0.15;
+    const nr = Math.abs(target - startPrice) * 0.12 + base * 0.016;
+    let p = Math.round(base + n * nr);
+    if (activeEvent) {
+      const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
+      p = Math.round(p * (1 + eff / 100));
+    }
+    return Math.max(p, 1);
+  })();
+
   const prevCandles = [];
   for (let i = 0; i < ri; i++) {
     const o = i === 0 ? stock.prices[0] : stock.prices[i - 1];
@@ -578,61 +598,56 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
     prevCandles.push({ o, c, h: Math.max(o, c) + spread, l: Math.min(o, c) - spread, label: `R${i + 1}` });
   }
 
-  // ── 현재 라운드 히스토리 → 캔들 ──
-  // priceHistory + 실시간 보간 포인트 혼합
   const rawHist = priceHistory?.[stock.id];
-  const hist = Array.isArray(rawHist)
-    ? rawHist.filter(p => roundStartedAt && p.t >= roundStartedAt)
+  const histPts = Array.isArray(rawHist)
+    ? rawHist.filter(p => roundStartedAt && p.t >= roundStartedAt).map(p => p.price)
     : [];
 
-  // 히스토리가 없거나 부족하면 선형 보간으로 포인트 직접 생성
-  let allPts = hist.map(p => p.price);
-
-  if (allPts.length < 4 && roundStartedAt && roundEndsAt) {
-    // 시작가 → 현재가까지 8개 보간 포인트 생성
-    const now = Date.now();
+  let allPts = [...histPts];
+  if (roundStartedAt && roundEndsAt) {
+    const now = ts;
     const total = roundEndsAt - roundStartedAt;
-    const steps = 8;
-    allPts = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = Math.min(i / steps, (now - roundStartedAt) / total);
-      const base = startPrice + (curPrice - startPrice) * t;
-      // 각 포인트마다 노이즈 추가
-      const n = Math.sin(i * 2.3 + (stock.id?.charCodeAt(0) || 1)) * 0.4
-              + Math.sin(i * 4.7 + (stock.id?.charCodeAt(1) || 2)) * 0.3;
-      const noise = Math.abs(curPrice - startPrice) * 0.08 + base * 0.012;
-      allPts.push(Math.max(1, Math.round(base + n * noise)));
-    }
+    const elapsed = Math.min(now - roundStartedAt, total);
+    const steps = Math.max(8, Math.floor(elapsed / 2000));
+    const interpPts = Array.from({ length: steps }, (_, i) => {
+      const frac = (i / (steps - 1)) * (elapsed / total);
+      const target = modifiedTargets?.[stock.id]?.round === round
+        ? modifiedTargets[stock.id].modifiedPrice
+        : stock.prices[ri];
+      const base = startPrice + (target - startPrice) * frac;
+      const n = Math.sin(i * 2.3 + (stock.id?.charCodeAt(0) || 1) * 1.7) * 0.45
+              + Math.sin(i * 4.1 + (stock.id?.charCodeAt(1) || 2) * 0.9) * 0.3;
+      const nr = Math.abs(target - startPrice) * 0.1 + base * 0.012;
+      return Math.max(1, Math.round(base + n * nr));
+    });
+    if (allPts.length < 4) allPts = interpPts;
   }
-
   if (!allPts.length) allPts.push(startPrice);
-  // 마지막 포인트는 항상 현재 실시간 가격으로 고정
   allPts[allPts.length - 1] = curPrice;
 
   const TARGET = Math.max(8, Math.min(24, Math.floor(allPts.length / 2)));
-  const seg = Math.max(1, Math.floor(allPts.length / TARGET));
+  const segSz = Math.max(1, Math.floor(allPts.length / TARGET));
   const liveCandles = [];
-  for (let i = 0; i < allPts.length; i += seg) {
-    const sl = allPts.slice(i, Math.min(i + seg, allPts.length));
+  for (let i = 0; i < allPts.length; i += segSz) {
+    const sl = allPts.slice(i, Math.min(i + segSz, allPts.length));
     if (!sl.length) continue;
-    const isLast = i + seg >= allPts.length;
+    const isLast = i + segSz >= allPts.length;
     const o = sl[0];
     const c = isLast ? curPrice : sl[sl.length - 1];
-    const h = Math.max(...sl, isLast ? curPrice : 0);
+    const h = Math.max(...sl, isLast ? curPrice : -Infinity);
     const l = Math.min(...sl, isLast ? curPrice : Infinity);
     const body = Math.abs(c - o);
-    const tail = Math.max(body * 0.35, c * 0.005);
-    liveCandles.push({ o, c, h: h + tail, l: l - tail, isLast });
+    const tail = Math.max(body * 0.35, c * 0.005, (h - l) * 0.1);
+    liveCandles.push({ o, c, h: h + tail, l: Math.max(1, l - tail), isLast });
   }
   if (!liveCandles.length) {
-    liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice) * 1.008, l: Math.min(startPrice, curPrice) * 0.992, isLast: true });
+    liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice) * 1.01, l: Math.min(startPrice, curPrice) * 0.99, isLast: true });
   }
 
-  // ── Y 범위 ──
   const all = [...prevCandles, ...liveCandles];
   const allP = all.flatMap(c => [c.h, c.l]);
   const dMin = Math.min(...allP), dMax = Math.max(...allP);
-  const pad = Math.max((dMax - dMin) * 0.12, dMin * 0.004);
+  const pad = Math.max((dMax - dMin) * 0.1, dMin * 0.005);
   const minP = dMin - pad, maxP = dMax + pad, range = maxP - minP || 1;
 
   const W = 320, H = 160;
@@ -643,43 +658,33 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
   const UP = G.red, DN = G.blue;
   const isUpNow = curPrice >= startPrice;
   const lc = isUpNow ? UP : DN;
-
   const totalSlots = all.length + 0.5;
   const slotW = cw / totalSlots;
   const bw = Math.max(4, Math.min(16, slotW * 0.7));
 
-  // 눈금
   const grids = [0, 1, 2, 3].map(i => {
     const v = minP + (range / 3) * i;
     return { y: toY(v), label: fmtN(Math.round(v)) };
   });
 
+  const blinkOp = 0.4 + 0.6 * Math.abs(Math.sin(ts * 0.002));
+
   return (
-    <svg
-      width="100%"
-      viewBox={`0 0 ${W} ${H}`}
-      style={{ display: "block", overflow: "visible" }}
-    >
-      {/* 그리드 */}
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
       {grids.map((g, i) => (
         <g key={i}>
-          <line x1={PL} y1={g.y} x2={W - PR} y2={g.y}
-            stroke={G.border} strokeWidth="0.6" strokeDasharray="3,4" />
+          <line x1={PL} y1={g.y} x2={W - PR} y2={g.y} stroke={G.border} strokeWidth="0.6" strokeDasharray="3,4" />
           <text x={W - PR + 3} y={g.y + 3.5} fontSize="8.5" fill={G.gray2} fontFamily="monospace">{g.label}</text>
         </g>
       ))}
 
-      {/* 구분선 */}
       {prevCandles.length > 0 && (
         <line
-          x1={PL + prevCandles.length * slotW + slotW * 0.2}
-          y1={PT - 4}
-          x2={PL + prevCandles.length * slotW + slotW * 0.2}
-          y2={PT + ch + 2}
+          x1={PL + prevCandles.length * slotW + slotW * 0.15} y1={PT - 4}
+          x2={PL + prevCandles.length * slotW + slotW * 0.15} y2={PT + ch + 2}
           stroke={G.border} strokeWidth="0.8" strokeDasharray="3,2" />
       )}
 
-      {/* 캔들 */}
       {all.map((c, i) => {
         const x = PL + slotW * i + slotW / 2;
         const isUp = c.c >= c.o;
@@ -699,46 +704,34 @@ function LiveBigChart({ stock, round, maxRound, roundStartedAt, roundEndsAt, act
         );
       })}
 
-      {/* 현재가 점선 */}
       <line x1={PL} y1={toY(curPrice)} x2={W - PR} y2={toY(curPrice)}
         stroke={lc} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.7" />
-
-      {/* 현재가 라벨 */}
       <rect x={W - PR + 2} y={toY(curPrice) - 9} width={PR - 4} height={18} fill={lc} rx={4} />
       <text x={W - PR + (PR - 4) / 2 + 2} y={toY(curPrice) + 4.5}
         textAnchor="middle" fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="bold">
         {fmtN(curPrice)}
       </text>
 
-      {/* R 레이블 */}
       {prevCandles.length > 0 && (
         <text x={PL + (prevCandles.length / 2) * slotW} y={H - 5}
-          textAnchor="middle" fontSize="9" fill={G.gray2} fontFamily="inherit">
-          R{round - 1}
-        </text>
+          textAnchor="middle" fontSize="9" fill={G.gray2} fontFamily="inherit">R{round - 1}</text>
       )}
-      <text
-        x={PL + (prevCandles.length + liveCandles.length / 2) * slotW}
-        y={H - 5} textAnchor="middle" fontSize="9.5"
-        fill={lc} fontFamily="inherit" fontWeight="bold">
-        R{round}
-      </text>
+      <text x={PL + (prevCandles.length + liveCandles.length / 2) * slotW} y={H - 5}
+        textAnchor="middle" fontSize="9.5" fill={lc} fontFamily="inherit" fontWeight="bold">R{round}</text>
 
-      {/* 깜빡 점 */}
       {(() => {
         const lx = PL + (all.length - 1) * slotW + slotW / 2;
-        const ly = toY(curPrice);
-        const op = 0.4 + 0.6 * Math.abs(Math.sin(tick * 0.4));
-        return <circle cx={lx} cy={ly} r="3.5" fill={lc} opacity={op} />;
+        return <circle cx={lx} cy={toY(curPrice)} r="3.5" fill={lc} opacity={blinkOp} />;
       })()}
     </svg>
   );
 }
 
+
 function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets }) {
-  const [, tick] = useState(0);
+  const [ts, setTs] = useState(Date.now());
   useEffect(() => {
-    const id = setInterval(() => tick(t => t + 1), 1000);
+    const id = setInterval(() => setTs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -746,44 +739,58 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
   if (!stock || stock.prices.length < 1) return <div style={{ width: 52, height: 28 }} />;
 
   const ri = Math.min(round - 1, stock.prices.length - 1);
-  const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
   const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
 
-  // 이전 라운드 확정가 + 현재 라운드 보간 포인트
-  const confirmedPts = stock.prices.slice(0, ri);
-
-  let livePts = [];
-  if (roundStartedAt && roundEndsAt) {
-    const now = Date.now();
+  const cur = (() => {
+    if (!roundStartedAt || !roundEndsAt) return stock.prices[ri] ?? startPrice;
     const total = roundEndsAt - roundStartedAt;
-    const steps = 5;
-    for (let i = 0; i <= steps; i++) {
-      const t = Math.min(i / steps, (now - roundStartedAt) / total);
-      const base = startPrice + (cur - startPrice) * t;
-      const n = Math.sin(i * 1.9 + (stock.id?.charCodeAt(0) || 1)) * 0.35;
-      const noise = Math.abs(cur - startPrice) * 0.06 + base * 0.008;
-      livePts.push(Math.max(1, Math.round(base + n * noise)));
+    const t = Math.min(Math.max((ts - roundStartedAt) / total, 0), 1);
+    const target = modifiedTargets?.[stock.id]?.round === round
+      ? modifiedTargets[stock.id].modifiedPrice
+      : stock.prices[ri];
+    const base = startPrice + (target - startPrice) * t;
+    const s1 = Math.floor(ts / 2000);
+    const n = Math.sin(s1 * 9301 + (stock.id?.charCodeAt(0) || 1) * 49297) * 0.6
+            + Math.sin(Math.floor(ts / 800) * 6271) * 0.3;
+    const nr = Math.abs(target - startPrice) * 0.1 + base * 0.012;
+    let p = Math.round(base + n * nr);
+    if (activeEvent) {
+      const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
+      p = Math.round(p * (1 + eff / 100));
     }
-    livePts[livePts.length - 1] = cur;
-  } else {
-    livePts = [startPrice, cur];
-  }
+    return Math.max(p, 1);
+  })();
+
+  const confirmedPts = stock.prices.slice(0, ri);
+  const steps = 6;
+  const livePts = Array.from({ length: steps }, (_, i) => {
+    if (!roundStartedAt || !roundEndsAt) return i === steps - 1 ? cur : startPrice;
+    const frac = i / (steps - 1) * Math.min((ts - roundStartedAt) / (roundEndsAt - roundStartedAt), 1);
+    const target = modifiedTargets?.[stock.id]?.round === round
+      ? modifiedTargets[stock.id].modifiedPrice : stock.prices[ri];
+    const base = startPrice + (target - startPrice) * frac;
+    const n = Math.sin(i * 2.1 + (stock.id?.charCodeAt(0) || 1) * 1.7) * 0.4;
+    const nr = Math.abs(target - startPrice) * 0.08 + base * 0.01;
+    return Math.max(1, Math.round(base + n * nr));
+  });
+  livePts[livePts.length - 1] = cur;
 
   const pts2 = [...confirmedPts, ...livePts];
-  if (pts2.length < 2) pts2.unshift(stock.prices[0]);
+  if (pts2.length < 2) pts2.unshift(startPrice);
 
-  const mn = Math.min(...pts2), mx = Math.max(...pts2), r = mx - mn || pts2[0] * 0.01;
+  const mn = Math.min(...pts2), mx = Math.max(...pts2);
+  const r = mx - mn || pts2[0] * 0.01;
   const pad = r * 0.2;
-  const minP = mn - pad, maxP = mx + pad, rng = maxP - minP || 1;
+  const minP = mn - pad, rng = mx + pad - minP || 1;
   const W = 52, H = 28;
   const toY = v => H - ((v - minP) / rng) * H;
 
   const coords = pts2.map((p, i) => ({ x: (i / (pts2.length - 1)) * W, y: toY(p) }));
-  const linePts = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x},${c.y}`).join(" ");
+  const linePts = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
   const fillPts = linePts + ` L${W},${H} L0,${H} Z`;
   const isUp = cur >= pts2[0];
   const col = isUp ? G.red : G.blue;
-  const op = 0.3 + 0.7 * Math.abs(Math.sin(tick * 0.3));
+  const blinkOp = 0.4 + 0.6 * Math.abs(Math.sin(ts * 0.002));
   const last = coords[coords.length - 1];
 
   return (
@@ -796,10 +803,11 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
       </defs>
       <path d={fillPts} fill={`url(#mg${stock.id})`} />
       <path d={linePts} fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last.x} cy={last.y} r="2.5" fill={col} opacity={op} />
+      <circle cx={last.x} cy={last.y} r="2.5" fill={col} opacity={blinkOp} />
     </svg>
   );
 }
+
 
 function useRoundTimer(phase,roundEndsAt){
   const [rem,setRem]=useState(null);
@@ -1678,6 +1686,8 @@ function UserApp(){
   const [teamName,setTeamName]=useState("");
   const [tab,setTab]=useState("market");
   const [detail,setDetail]=useState(null);
+  const detailRef=useRef(null);
+  const setDetailSafe=(st)=>{detailRef.current=st;setDetail(st);};
   const [orderSide,setOrderSide]=useState("buy");
   const [qty,setQty]=useState(1);
   const [leverage,setLeverage]=useState(1);
@@ -2082,7 +2092,7 @@ function UserApp(){
             const prev=round<=1?st.prices[0]:st.prices[Math.min(round-2,st.prices.length-1)];
             const p=isBlind?0:pctOf(cur,prev),isUp=p>0;
             return(
-              <div key={st.id} onClick={()=>{setDetail(st);setOrderSide("buy");setQty(1);setLeverage(1);setScreen("detail");}}
+              <div key={st.id} onClick={()=>{setDetailSafe(st);setOrderSide("buy");setQty(1);setLeverage(1);setScreen("detail");}}
                 style={{background:G.white,display:"flex",alignItems:"center",padding:"13px 18px",borderBottom:`1px solid ${G.border}`,cursor:"pointer",gap:10}}>
                 <div style={{width:40,height:40,borderRadius:11,background:G.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{st.emoji}</div>
                 <div style={{flex:1,minWidth:0}}>
@@ -2140,7 +2150,7 @@ function UserApp(){
               const cur=getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets);
               const ev2=cur*h.qty,pnl=ev2-h.avgPrice*h.qty;
               return(
-                <div key={st.id} onClick={()=>{setDetail(st);setOrderSide("sell");setQty(1);setLeverage(1);setScreen("detail");}}
+                <div key={st.id} onClick={()=>{setDetailSafe(st);setOrderSide("sell");setQty(1);setLeverage(1);setScreen("detail");}}
                   style={{background:G.white,padding:"13px 18px",borderBottom:`1px solid ${G.border}`,cursor:"pointer"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                     <div style={{fontSize:14,fontWeight:700,color:G.black}}>{st.emoji} {st.name}</div>
