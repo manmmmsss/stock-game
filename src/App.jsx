@@ -632,15 +632,27 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 /* ── 캔들스틱 차트 ── */
 function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets }) {
   const [, tick] = useState(0);
+  const containerRef = useRef(null);
+  const [containerW, setContainerW] = useState(300);
+
   useEffect(() => {
     const id = setInterval(() => tick(t => t + 1), 3000);
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setContainerW(el.offsetWidth || 300);
+    const obs = new ResizeObserver(e => setContainerW(e[0].contentRect.width || 300));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   if (!stock) return null;
 
   if (blind) return (
-    <div style={{ height: 140, display: "flex", flexDirection: "column",
+    <div ref={containerRef} style={{ height: 150, display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", background: G.bg, borderRadius: 12 }}>
       <div style={{ fontSize: 28, marginBottom: 6 }}>🙈</div>
       <div style={{ fontSize: 13, fontWeight: 700, color: G.gray1 }}>블라인드 라운드</div>
@@ -649,43 +661,34 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
 
   const ri = Math.min(round - 1, stock.prices.length - 1);
   const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+  const target = modifiedTargets?.[stock.id]?.round === round
+    ? modifiedTargets[stock.id].modifiedPrice : stock.prices[ri];
 
-  // ── 핵심: 화면과 완전히 동일한 함수 사용 ──
+  // 현재 라운드 실시간 가격
   const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
 
-  const CANDLE_MS = 15000; // 15초마다 캔들 확정
-
-  // getCurrentPrice와 동일한 공식으로 특정 과거 시각의 가격 계산
-  const mod = modifiedTargets?.[stock.id];
-  const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
-
+  // getPriceAt — 현재 라운드 특정 시각 가격
   const getPriceAt = (atTs) => {
     if (!roundStartedAt || !roundEndsAt) return target;
     const total = roundEndsAt - roundStartedAt;
     const t = Math.min(Math.max((atTs - roundStartedAt) / total, 0), 1);
     const base = startPrice + (target - startPrice) * t;
-
     const sid = stock.id?.charCodeAt(0) || 1;
     const sid2 = stock.id?.charCodeAt(1) || 2;
     const SLOT_MS = 3000;
-    const currentSlot = Math.floor((atTs - roundStartedAt) / SLOT_MS);
+    const slot = Math.floor((atTs - roundStartedAt) / SLOT_MS);
     const totalSlots = Math.ceil(total / SLOT_MS);
-
     let walk = 0;
-    for (let i = 0; i <= Math.min(currentSlot, totalSlots); i++) {
-      const slotSeed = (sid * 1664525 + sid2 * 1013904223 + i * 22695477 + roundStartedAt) & 0x7fffffff;
-      const dir = ((slotSeed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff * 2 - 1;
-      walk += dir;
+    for (let i = 0; i <= Math.min(slot, totalSlots); i++) {
+      const s = (sid * 1664525 + sid2 * 1013904223 + i * 22695477 + roundStartedAt) & 0x7fffffff;
+      walk += ((s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff * 2 - 1;
     }
-
-    const slotSeed2 = (sid * 22695477 + currentSlot * 1664525 + roundStartedAt) & 0x7fffffff;
-    const fine = Math.sin(atTs * 0.0031 + slotSeed2 * 0.0001) * 0.3
-               + Math.sin(atTs * 0.0071 + slotSeed2 * 0.0002) * 0.2;
-
-    const walkNorm = walk / Math.sqrt(Math.max(currentSlot + 1, 1));
-    const noiseRange = Math.abs(target - startPrice) * 0.25 + base * 0.015;
-    let p = Math.round(base + walkNorm * noiseRange * 0.7 + fine * noiseRange * 0.3);
-
+    const s2 = (sid * 22695477 + slot * 1664525 + roundStartedAt) & 0x7fffffff;
+    const fine = Math.sin(atTs * 0.0031 + s2 * 0.0001) * 0.3
+               + Math.sin(atTs * 0.0071 + s2 * 0.0002) * 0.2;
+    const walkNorm = walk / Math.sqrt(Math.max(slot + 1, 1));
+    const nr = Math.abs(target - startPrice) * 0.25 + base * 0.015;
+    let p = Math.round(base + walkNorm * nr * 0.7 + fine * nr * 0.3);
     if (activeEvent) {
       const eff = activeEvent.stockEffects?.[stock.id] ?? activeEvent.globalEffect ?? 0;
       p = Math.round(p * (1 + eff / 100));
@@ -693,129 +696,168 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     return Math.max(p, 1);
   };
 
-  // ── 이전 라운드 확정 캔들 ──
-  const prevCandles = [];
-  for (let i = 0; i < ri; i++) {
-    const o = i === 0 ? stock.prices[0] : stock.prices[i - 1];
-    const c = stock.prices[i];
-    const wick = Math.abs(c - o) * 0.2 + Math.min(o, c) * 0.005;
-    prevCandles.push({ o, c, h: Math.max(o, c) + wick, l: Math.max(1, Math.min(o, c) - wick), label: `R${i + 1}`, done: true });
-  }
-
-  // ── 현재 라운드 캔들 (15초마다 확정) ──
+  // ── 현재 라운드 캔들만 생성 (15초 간격) ──
+  const CANDLE_MS = 15000;
   const liveCandles = [];
+
   if (roundStartedAt) {
     const now = Date.now();
     const elapsed = Math.max(0, now - roundStartedAt);
     const doneCnt = Math.floor(elapsed / CANDLE_MS);
 
-    // 확정된 캔들들
     for (let ci = 0; ci < doneCnt; ci++) {
       const cs = roundStartedAt + ci * CANDLE_MS;
       const ce = cs + CANDLE_MS;
-      // 6개 샘플로 OHLC 계산
-      const samples = Array.from({ length: 6 }, (_, i) => getPriceAt(cs + (CANDLE_MS / 5) * i));
-      samples.push(getPriceAt(ce - 100));
+      const samples = Array.from({ length: 8 }, (_, i) =>
+        getPriceAt(cs + (CANDLE_MS / 7) * i)
+      );
+      samples.push(getPriceAt(ce - 200));
       const o = samples[0];
       const c = samples[samples.length - 1];
-      const h = Math.max(...samples);
-      const l = Math.min(...samples);
-      liveCandles.push({ o, c, h, l, done: true });
+      liveCandles.push({ o, c, h: Math.max(...samples), l: Math.min(...samples), done: true });
     }
 
-    // 현재 진행 중인 캔들
+    // 현재 진행 중 캔들
     const cs = roundStartedAt + doneCnt * CANDLE_MS;
     const elIn = Math.max(0, now - cs);
     const steps = Math.max(2, Math.floor(elIn / 1000));
     const samples = Array.from({ length: steps + 1 }, (_, i) =>
       i === steps ? curPrice : getPriceAt(cs + (elIn / steps) * i)
     );
-    const o = samples[0];
-    const h = Math.max(...samples);
-    const l = Math.min(...samples);
-    liveCandles.push({ o, c: curPrice, h, l, done: false });
+    liveCandles.push({
+      o: samples[0], c: curPrice,
+      h: Math.max(...samples), l: Math.min(...samples),
+      done: false
+    });
   } else {
     liveCandles.push({ o: startPrice, c: curPrice, h: Math.max(startPrice, curPrice), l: Math.min(startPrice, curPrice), done: false });
   }
 
-  const all = [...prevCandles, ...liveCandles];
+  // ── 레이아웃: 고정 캔들 너비 ──
+  const CANDLE_W = 12;
+  const CANDLE_GAP = 3;
+  const SLOT_W = CANDLE_W + CANDLE_GAP;
+  const PR = 68;
+  const PL = 40; // 왼쪽에 이전 라운드 종가 표시 공간
+  const PT = 12;
+  const PB = 20;
+  const H = 160;
+  const viewW = containerW;
+  const ch = H - PT - PB;
 
-  // ── Y 범위 ──
-  const allP = all.flatMap(c => [c.h, c.l]);
-  const dMin = Math.min(...allP), dMax = Math.max(...allP);
-  const pad = Math.max((dMax - dMin) * 0.12, dMin * 0.004);
+  // 이전 라운드 종가 (기준점)
+  const prevClose = startPrice;
+
+  // 현재 라운드 캔들들 Y 범위
+  const allPrices = [prevClose, ...liveCandles.flatMap(c => [c.h, c.l])];
+  const dMin = Math.min(...allPrices);
+  const dMax = Math.max(...allPrices);
+  const pad = Math.max((dMax - dMin) * 0.15, dMin * 0.005);
   const minP = dMin - pad, maxP = dMax + pad, range = maxP - minP || 1;
-
-  const W = 320, H = 170;
-  const PL = 4, PR = 72, PT = 14, PB = 24;
-  const cw = W - PL - PR, ch = H - PT - PB;
   const toY = v => Math.max(PT + 1, Math.min(PT + ch - 1, PT + ch - ((v - minP) / range) * ch));
-
-  const slotW = cw / (all.length + 0.5);
-  const bw = Math.max(5, Math.min(18, slotW * 0.72));
 
   const UP = G.red, DN = G.blue;
   const isUpNow = curPrice >= startPrice;
   const lc = isUpNow ? UP : DN;
+  const blinkOp = 0.35 + 0.65 * Math.abs(Math.sin(Date.now() * 0.003));
 
+  // 캔들 총 너비
+  const totalCandleW = liveCandles.length * SLOT_W;
+  // 캔들 그리기 시작 X (오른쪽 정렬)
+  const chartAreaW = viewW - PL - PR;
+  const candleStartX = PL + Math.max(0, chartAreaW - totalCandleW);
+
+  // 눈금
   const grids = [0, 1, 2, 3].map(i => {
     const v = minP + (range / 3) * i;
     return { y: toY(v), label: fmtN(Math.round(v)) };
   });
 
-  const blinkOp = 0.35 + 0.65 * Math.abs(Math.sin(Date.now() * 0.003));
-
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
-      {grids.map((g, i) => (
-        <g key={i}>
-          <line x1={PL} y1={g.y} x2={W - PR} y2={g.y} stroke={G.border} strokeWidth="0.6" strokeDasharray="3,4" />
-          <text x={W - PR + 3} y={g.y + 3.5} fontSize="8" fill={G.gray2} fontFamily="monospace">{g.label}</text>
-        </g>
-      ))}
+    <div ref={containerRef} style={{ position: "relative", overflow: "hidden" }}>
+      <svg width="100%" height={H} style={{ display: "block" }}>
 
-      {prevCandles.length > 0 && (
-        <line
-          x1={PL + prevCandles.length * slotW - 1} y1={PT - 4}
-          x2={PL + prevCandles.length * slotW - 1} y2={PT + ch + 2}
-          stroke={G.gray3} strokeWidth="0.8" strokeDasharray="3,2" />
-      )}
-
-      {all.map((c, i) => {
-        const x = PL + slotW * i + slotW / 2;
-        const isUp = c.c >= c.o;
-        const col = isUp ? UP : DN;
-        const bTop = toY(Math.max(c.o, c.c));
-        const bBot = toY(Math.min(c.o, c.c));
-        const bH = Math.max(bBot - bTop, 2);
-        const wTop = toY(c.h), wBot = toY(c.l);
-        const lw = !c.done ? 2.2 : 1.6;
-        return (
+        {/* 그리드 */}
+        {grids.map((g, i) => (
           <g key={i}>
-            <line x1={x} y1={wTop} x2={x} y2={bTop} stroke={col} strokeWidth={Math.max(lw * 0.55, 1)} strokeLinecap="round" />
-            <line x1={x} y1={bBot} x2={x} y2={wBot} stroke={col} strokeWidth={Math.max(lw * 0.55, 1)} strokeLinecap="round" />
-            <rect x={x - bw / 2} y={bTop} width={bw} height={bH} fill={col} stroke={col} strokeWidth={lw} rx={1.5} />
-            {c.label && (
-              <text x={x} y={H - 6} textAnchor="middle" fontSize="8.5" fill={G.gray2} fontFamily="inherit">{c.label}</text>
-            )}
+            <line x1={PL} y1={g.y} x2={viewW - PR} y2={g.y}
+              stroke={G.border} strokeWidth="0.6" strokeDasharray="3,4" />
+            <text x={viewW - PR + 3} y={g.y + 3.5}
+              fontSize="8" fill={G.gray2} fontFamily="monospace">{g.label}</text>
           </g>
-        );
-      })}
+        ))}
 
-      <text x={PL + (prevCandles.length + liveCandles.length / 2) * slotW} y={H - 6}
-        textAnchor="middle" fontSize="9" fill={lc} fontFamily="inherit" fontWeight="bold">R{round}</text>
+        {/* ── 왼쪽: 이전 라운드 종가 기준점 ── */}
+        {ri > 0 && (
+          <g>
+            {/* 이전 종가 수평 점선 */}
+            <line
+              x1={PL - 2} y1={toY(prevClose)}
+              x2={candleStartX + CANDLE_W / 2} y2={toY(prevClose)}
+              stroke={G.gray2} strokeWidth="0.8" strokeDasharray="3,3" />
+            {/* 이전 종가 동그라미 */}
+            <circle cx={PL - 6} cy={toY(prevClose)} r="3"
+              fill={G.gray2} />
+            {/* 이전 종가 레이블 */}
+            <text x={2} y={toY(prevClose) + 4}
+              fontSize="8" fill={G.gray2} fontFamily="monospace">{fmtN(prevClose)}</text>
+            {/* R구분 레이블 */}
+            <text x={PL - 2} y={PT - 2}
+              fontSize="8" fill={G.gray2} fontFamily="inherit">R{round - 1}종가</text>
+          </g>
+        )}
 
-      <line x1={PL} y1={toY(curPrice)} x2={W - PR} y2={toY(curPrice)}
-        stroke={lc} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.8" />
-      <rect x={W - PR + 2} y={toY(curPrice) - 9} width={PR - 4} height={18} fill={lc} rx={4} />
-      <text x={W - PR + (PR - 4) / 2 + 2} y={toY(curPrice) + 4.5}
-        textAnchor="middle" fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="bold">
-        {fmtN(curPrice)}
-      </text>
+        {/* 이전 종가 → 첫 캔들 open 연결선 */}
+        {ri > 0 && liveCandles.length > 0 && (
+          <line
+            x1={PL - 2} y1={toY(prevClose)}
+            x2={candleStartX + CANDLE_W / 2} y2={toY(liveCandles[0].o)}
+            stroke={G.gray3} strokeWidth="0.8" strokeDasharray="2,3" />
+        )}
 
-      <circle cx={PL + (all.length - 1) * slotW + slotW / 2} cy={toY(curPrice)}
-        r="3.5" fill={lc} opacity={blinkOp} />
-    </svg>
+        {/* ── 현재 라운드 캔들 ── */}
+        {liveCandles.map((c, i) => {
+          const x = candleStartX + i * SLOT_W + CANDLE_W / 2;
+          const isUp = c.c >= c.o;
+          const col = isUp ? UP : DN;
+          const bTop = toY(Math.max(c.o, c.c));
+          const bBot = toY(Math.min(c.o, c.c));
+          const bH = Math.max(bBot - bTop, 1.5);
+          const wTop = toY(c.h), wBot = toY(c.l);
+          const lw = !c.done ? 2 : 1.5;
+          return (
+            <g key={i}>
+              <line x1={x} y1={wTop} x2={x} y2={bTop}
+                stroke={col} strokeWidth="1" strokeLinecap="round" />
+              <line x1={x} y1={bBot} x2={x} y2={wBot}
+                stroke={col} strokeWidth="1" strokeLinecap="round" />
+              <rect x={x - CANDLE_W / 2} y={bTop} width={CANDLE_W} height={bH}
+                fill={col} stroke={col} strokeWidth={lw} rx={1} />
+            </g>
+          );
+        })}
+
+        {/* 현재 라운드 레이블 */}
+        <text x={candleStartX + 2} y={PT - 2}
+          fontSize="8.5" fill={lc} fontFamily="inherit" fontWeight="bold">R{round}</text>
+
+        {/* 현재가 점선 */}
+        <line x1={PL} y1={toY(curPrice)} x2={viewW - PR} y2={toY(curPrice)}
+          stroke={lc} strokeWidth="0.9" strokeDasharray="4,3" opacity="0.8" />
+
+        {/* 현재가 라벨 */}
+        <rect x={viewW - PR + 2} y={toY(curPrice) - 9} width={PR - 4} height={18} fill={lc} rx={4} />
+        <text x={viewW - PR + (PR - 4) / 2 + 2} y={toY(curPrice) + 4.5}
+          textAnchor="middle" fontSize="9.5" fill="white" fontFamily="monospace" fontWeight="bold">
+          {fmtN(curPrice)}
+        </text>
+
+        {/* 깜빡 점 */}
+        <circle
+          cx={candleStartX + (liveCandles.length - 1) * SLOT_W + CANDLE_W / 2}
+          cy={toY(curPrice)} r="3.5" fill={lc} opacity={blinkOp} />
+      </svg>
+    </div>
   );
 }
 
