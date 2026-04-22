@@ -1351,28 +1351,89 @@ function AdminApp(){
             </div>}
           </div>
 
-          {/* 채팅 전송 */}
+          {/* 채팅 관리 */}
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💬 채팅 전송</div>
-            <div style={{display:"flex",gap:8}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💬 채팅 관리</div>
+
+            {/* 채팅 전송 */}
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
               <TextInput
                 value={adminChatInput}
                 onChange={e=>setAdminChatInput(e.target.value)}
-                placeholder="운영자로 채팅 전송"
+                onKeyDown={e=>{
+                  if(e.key==="Enter"){
+                    const text=adminChatInput.trim();
+                    if(!text) return;
+                    const msg={id:uid(),teamName:"🛠 운영자",text,ts:Date.now()};
+                    setShared(s=>({...s,
+                      chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200)
+                    }));
+                    setAdminChatInput("");
+                    t2("채팅 전송됨");
+                  }
+                }}
+                placeholder="운영자로 채팅 전송 (Enter)"
                 style={{flex:1}}
               />
               <Btn onClick={()=>{
                 const text=adminChatInput.trim();
-                if(!text) return;
+                if(!text){t2("메시지를 입력하세요");return;}
                 const msg={id:uid(),teamName:"🛠 운영자",text,ts:Date.now()};
-                setShared(s=>({
-                  ...s,
-                  chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200),
+                setShared(s=>({...s,
+                  chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200)
                 }));
                 setAdminChatInput("");
                 t2("채팅 전송됨");
               }} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
             </div>
+
+            {/* 채팅 미리보기 + 개별 삭제 */}
+            <div style={{maxHeight:200,overflowY:"auto",marginBottom:8}}>
+              {(shared.chatMessages||[]).length===0
+                ?<div style={{textAlign:"center",color:G.gray2,fontSize:12,padding:"12px 0"}}>채팅 없음</div>
+                :[...(shared.chatMessages||[])].reverse().map(msg=>(
+                  <div key={msg.id} style={{display:"flex",alignItems:"flex-start",gap:8,
+                    padding:"6px 0",borderBottom:`1px solid ${G.border}`}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:11,fontWeight:600,color:msg.teamName==="🛠 운영자"?G.orange:G.blue,marginBottom:2}}>
+                        {msg.teamName}
+                      </div>
+                      {msg.type==="trade"
+                        ?<div style={{fontSize:11,color:G.gray1}}>📊 거래 제안 카드</div>
+                        :<div style={{fontSize:12,color:G.black,wordBreak:"break-all"}}>{msg.text}</div>
+                      }
+                      <div style={{fontSize:10,color:G.gray2,marginTop:2}}>
+                        {new Date(msg.ts).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
+                      </div>
+                    </div>
+                    <div onClick={()=>{
+                      setShared(s=>({...s,
+                        chatMessages:(Array.isArray(s.chatMessages)?s.chatMessages:[])
+                          .filter(m=>m.id!==msg.id)
+                      }));
+                      t2("메시지 삭제됨");
+                    }}
+                      style={{width:24,height:24,borderRadius:6,background:G.redLight,color:G.red,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        cursor:"pointer",fontSize:13,fontWeight:700,flexShrink:0}}>×</div>
+                  </div>
+                ))
+              }
+            </div>
+
+            {/* 전체 삭제 */}
+            {(shared.chatMessages||[]).length>0&&(
+              <Btn
+                onClick={()=>{
+                  if(!window.confirm("채팅 전체를 삭제할까요?")) return;
+                  setShared(s=>({...s,chatMessages:["_empty"]}));
+                  t2("채팅 전체 삭제됨");
+                }}
+                color={G.redLight} textColor={G.red}
+                style={{width:"100%",padding:"9px",fontSize:12}}>
+                🗑 채팅 전체 삭제
+              </Btn>
+            )}
           </div>
 
           {/* 현재 상태 */}
