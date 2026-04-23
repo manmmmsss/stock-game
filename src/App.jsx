@@ -474,7 +474,11 @@ function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent,
   const ri = Math.min(round - 1, stock.prices.length - 1);
   const mod = modifiedTargets?.[stock.id];
   const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
-  const prev = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+  const prev = ri > 0
+    ? stock.prices[ri - 1]
+    : Math.round(stock.prices[0] * (1 - (stock.prices[1] !== undefined
+        ? (stock.prices[1] - stock.prices[0]) / stock.prices[0] * 0.5
+        : 0.03)));
 
   // 라운드 진행 중이 아닐 때
   if (!roundStartedAt || !roundEndsAt) return prev;
@@ -786,7 +790,11 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
       </div>
     );
   }
-  const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+  const startPrice = ri > 0
+    ? stock.prices[ri - 1]
+    : Math.round(stock.prices[0] * (1 - (stock.prices[1] !== undefined
+        ? (stock.prices[1] - stock.prices[0]) / stock.prices[0] * 0.5
+        : 0.03)));
   const target = modifiedTargets?.[stock.id]?.round === round
     ? modifiedTargets[stock.id].modifiedPrice : stock.prices[ri];
 
@@ -1036,7 +1044,11 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
   if (!stock || stock.prices.length < 1) return <div style={{ width: 52, height: 28 }} />;
 
   const ri = Math.min(round - 1, stock.prices.length - 1);
-  const startPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+  const startPrice = ri > 0
+    ? stock.prices[ri - 1]
+    : Math.round(stock.prices[0] * (1 - (stock.prices[1] !== undefined
+        ? (stock.prices[1] - stock.prices[0]) / stock.prices[0] * 0.5
+        : 0.03)));
 
   const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets);
 
