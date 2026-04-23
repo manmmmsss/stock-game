@@ -197,8 +197,12 @@ const useShared = () => {
         if (val.priceHistory?._empty) val.priceHistory = {};
         if (val.modifiedTargets?._empty) val.modifiedTargets = {};
         if (val.tradeOffers?._empty) val.tradeOffers = {};
+        if (val.bets?._empty) val.bets = {};
+        if (val.betOdds?._empty) val.betOdds = {};
         if (!val.roundStartedAt || val.roundStartedAt === 0) val.roundStartedAt = null;
         if (!val.roundEndsAt || val.roundEndsAt === 0) val.roundEndsAt = null;
+        if (!val.breakEndsAt || val.breakEndsAt === 0) val.breakEndsAt = null;
+        if (!val.betDeadline || val.betDeadline === 0) val.betDeadline = null;
         if (!val.activeEvent || val.activeEvent === 0) val.activeEvent = null;
         if (!val.noticeAt || val.noticeAt === 0) val.noticeAt = null;
         if (!val.nextAutoEventAt || val.nextAutoEventAt === 0) val.nextAutoEventAt = null;
@@ -444,6 +448,20 @@ const INIT_SS={
   priceHistory: {},
   chatMessages: [],
   tradeOffers: {},
+  // 자동 진행
+  autoPlay: false,
+  breakDuration: 60,
+  betWindow: 30,
+  breakEndsAt: null,
+  betDeadline: null,
+  // 베팅
+  betEnabled: false,
+  baseOdds: 1.8,
+  dynamicOdds: false,
+  minBet: 100000,
+  maxBetPct: 50,
+  bets: {},
+  betOdds: {},
 };
 
 
@@ -1118,6 +1136,52 @@ function AdminApp(){
   const [newTeamPw,setNewTeamPw]=useState("");
   const [saveTplName,setSaveTplName]=useState("");
   const [editingTpl,setEditingTpl]=useState(null);
+  // 자동진행 / 베팅 설정
+  const [breakDuration,setBreakDuration]=useState(60);
+  const [betWindow,setBetWindow]=useState(30);
+  const [betEnabled,setBetEnabled]=useState(false);
+  const [baseOdds,setBaseOdds]=useState(1.8);
+  const [dynamicOdds,setDynamicOdds]=useState(false);
+  const [minBet,setMinBet]=useState(100000);
+  const [maxBetPct,setMaxBetPct]=useState(50);
+  const [breakRem,setBreakRem]=useState(null);
+  const [betRem,setBetRem]=useState(null);
+
+  // shared → 로컬 설정 동기화
+  useEffect(()=>{
+    if(shared.breakDuration!==undefined) setBreakDuration(shared.breakDuration);
+    if(shared.betWindow!==undefined) setBetWindow(shared.betWindow);
+    if(shared.betEnabled!==undefined) setBetEnabled(shared.betEnabled);
+    if(shared.baseOdds!==undefined) setBaseOdds(shared.baseOdds);
+    if(shared.dynamicOdds!==undefined) setDynamicOdds(shared.dynamicOdds);
+    if(shared.minBet!==undefined) setMinBet(shared.minBet);
+    if(shared.maxBetPct!==undefined) setMaxBetPct(shared.maxBetPct);
+  },[shared.breakDuration,shared.betWindow,shared.betEnabled,shared.baseOdds,shared.dynamicOdds,shared.minBet,shared.maxBetPct]);
+
+  // 휴식 타이머 (표시용)
+  useEffect(()=>{
+    if(shared.phase!=="break"||!shared.breakEndsAt){setBreakRem(null);setBetRem(null);return;}
+    const tick=()=>{
+      const now=Date.now();
+      setBreakRem(Math.max(0,Math.ceil((shared.breakEndsAt-now)/1000)));
+      setBetRem(shared.betDeadline?Math.max(0,Math.ceil((shared.betDeadline-now)/1000)):null);
+    };
+    tick();
+    const id=setInterval(tick,1000);
+    return()=>clearInterval(id);
+  },[shared.phase,shared.breakEndsAt,shared.betDeadline]);
+
+  // 자동 라운드 진행
+  useEffect(()=>{
+    if(!shared.autoPlay||shared.phase!=="break"||!shared.breakEndsAt) return;
+    const nextR=(shared.round||0)+1;
+    if(nextR>(shared.maxRound||3)) return;
+    const rem=shared.breakEndsAt-Date.now();
+    if(rem<=0){startRound(nextR);return;}
+    const timer=setTimeout(()=>startRound(nextR),rem);
+    return()=>clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[shared.autoPlay,shared.phase,shared.breakEndsAt,shared.round,shared.maxRound]);
 
   // 템플릿 적용
   const applyTemplate = tpl => {
@@ -1198,7 +1262,8 @@ function AdminApp(){
   const saveSettings=()=>{
     setShared(s=>({...s,stocks:stocks.map(x=>({...x,prices:[...x.prices]})),
       shopItems:shopItems.map(x=>({...x})),rounds:rounds.map(x=>({...x})),
-      eventPresets:eventPresets.map(x=>({...x})),maxRound,initCash,feeRate,leverageEnabled,leverageMax}));
+      eventPresets:eventPresets.map(x=>({...x})),maxRound,initCash,feeRate,leverageEnabled,leverageMax,
+      breakDuration,betWindow,betEnabled,baseOdds,dynamicOdds,minBet,maxBetPct}));
     t2("설정 저장됨 ✓");
   };
 
@@ -1234,42 +1299,72 @@ function AdminApp(){
         const maxMs=(ev.triggerIntervalMax||3)*60*1000;
         return Date.now()+minMs+Math.random()*(maxMs-minMs);
       })(),
+      breakEndsAt:null,
+      betDeadline:null,
     }));
     t2(`Round ${r} 시작 (${rc?.durationMin||5}분)`);
   };
   const stopRound=()=>{
-    // 배당금 지급
     const r=shared.round;
     const rc=shared.rounds?.[r-1];
     const divs=rc?.dividends||{};
-    if(Object.keys(divs).length>0){
-      setShared(s=>{
-        const teams={...s.teams};
+    setShared(s=>{
+      const teams={...s.teams};
+      const nowT=Date.now();
+
+      // 베팅 정산
+      if(s.betEnabled&&s.bets?.[r]){
         for(const [tid,tm] of Object.entries(teams)){
-          let bonus=0;
-          for(const [sid,perShare] of Object.entries(divs)){
-            const qty=tm.holdings?.[sid]?.qty||0;
-            bonus+=qty*perShare;
+          const teamBets=s.bets[r]?.[tid]||{};
+          let betWinnings=0;
+          for(const [sid,bet] of Object.entries(teamBets)){
+            const stock=s.stocks?.find(x=>x.id===sid);
+            if(!stock||!bet) continue;
+            const ri=Math.min(r-1,stock.prices.length-1);
+            const mod=s.modifiedTargets?.[sid];
+            const target=(mod&&mod.round===r)?mod.modifiedPrice:stock.prices[ri];
+            const startPrice=ri>0?stock.prices[ri-1]:stock.prices[0];
+            const dir=target>=startPrice?"up":"down";
+            if(bet.direction===dir){
+              const oddsInfo=s.betOdds?.[sid];
+              const odds=s.dynamicOdds&&oddsInfo
+                ?(dir==="up"?(oddsInfo.upOdds||s.baseOdds||1.8):(oddsInfo.downOdds||s.baseOdds||1.8))
+                :(s.baseOdds||1.8);
+              betWinnings+=Math.round(bet.amount*(+odds));
+            }
           }
-          if(bonus>0) {
-            const existingHistory = Array.isArray(tm.history)
-              ? tm.history
-              : Object.values(tm.history || {});
-            teams[tid]={...tm, cash:tm.cash+bonus,
-              history:[...existingHistory,{
-                time:new Date().toLocaleTimeString('ko-KR'),
-                type:'dividend',stockName:'배당금',
-                stockEmoji:'💰',qty:0,price:0,total:bonus
-              }]};
+          if(betWinnings>0){
+            const hist=Array.isArray(tm.history)?tm.history:Object.values(tm.history||{});
+            teams[tid]={...tm,cash:tm.cash+betWinnings,
+              history:[...hist,{time:new Date().toLocaleTimeString('ko-KR'),
+                type:'bet_win',stockName:'베팅 적중',stockEmoji:'🎯',qty:0,price:0,total:betWinnings}]};
           }
         }
-        return{...s,phase:"break",roundEndsAt:null,roundStartedAt:null,teams};
-      });
-      t2(`Round ${r} 종료 — 배당금 지급 완료`);
-    } else {
-      setShared(s=>({...s,phase:"break",roundEndsAt:null,roundStartedAt:null}));
-      t2("라운드 종료");
-    }
+      }
+
+      // 배당금 지급
+      for(const [tid,tm] of Object.entries(teams)){
+        let bonus=0;
+        for(const [sid,perShare] of Object.entries(divs)){
+          const qty=tm.holdings?.[sid]?.qty||0;
+          bonus+=qty*perShare;
+        }
+        if(bonus>0){
+          const hist=Array.isArray(tm.history)?tm.history:Object.values(tm.history||{});
+          teams[tid]={...tm,cash:tm.cash+bonus,
+            history:[...hist,{time:new Date().toLocaleTimeString('ko-KR'),
+              type:'dividend',stockName:'배당금',stockEmoji:'💰',qty:0,price:0,total:bonus}]};
+        }
+      }
+
+      return{...s,
+        phase:"break",roundEndsAt:null,roundStartedAt:null,teams,
+        betOdds:{},
+        breakEndsAt:s.autoPlay?(nowT+s.breakDuration*1000):null,
+        betDeadline:s.autoPlay&&s.betEnabled?(nowT+s.betWindow*1000):null,
+      };
+    });
+    t2(`Round ${r} 종료`+(Object.keys(divs).length>0?" — 배당금 지급":""));
   };
   const endGame=()=>{setShared(s=>({...s,phase:"ended"}));t2("게임 종료");};
 
@@ -1360,6 +1455,18 @@ function AdminApp(){
         nextAutoEventAt: 0,
         chatMessages: ["_empty"],
         tradeOffers: { _empty: true },
+        autoPlay: current.autoPlay || false,
+        breakDuration: current.breakDuration || 60,
+        betWindow: current.betWindow || 30,
+        betEnabled: current.betEnabled || false,
+        baseOdds: current.baseOdds || 1.8,
+        dynamicOdds: current.dynamicOdds || false,
+        minBet: current.minBet || 100000,
+        maxBetPct: current.maxBetPct || 50,
+        breakEndsAt: 0,
+        betDeadline: 0,
+        bets: { _empty: true },
+        betOdds: { _empty: true },
       };
 
       await fbSet(GAME_REF, newState);
@@ -1517,6 +1624,35 @@ function AdminApp(){
                 <span style={{fontSize:13,fontWeight:600,color:G.black}}>{v}</span>
               </div>
             ))}
+          </div>
+
+          {/* 자동 진행 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:shared.autoPlay&&shared.phase==="break"?10:0}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:G.black}}>자동 진행</div>
+                <div style={{fontSize:11,color:G.gray1}}>라운드 종료 후 휴식시간({breakDuration}s) 뒤 자동 시작</div>
+              </div>
+              <div onClick={()=>setShared(s=>({...s,autoPlay:!s.autoPlay}))}
+                style={{width:44,height:26,borderRadius:13,background:shared.autoPlay?G.green:G.gray3,
+                  position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:G.white,position:"absolute",
+                  top:2,left:shared.autoPlay?20:2,transition:"left .2s"}}/>
+              </div>
+            </div>
+            {shared.autoPlay&&shared.phase==="break"&&(
+              <div style={{background:G.yellowLight,borderRadius:10,padding:"10px 12px"}}>
+                <div style={{fontSize:12,fontWeight:700,color:G.yellow,marginBottom:2}}>
+                  휴식 중 — R{(shared.round||0)+1} 자동 시작까지
+                  <span style={{fontFamily:"monospace",marginLeft:6}}>{breakRem!==null?secToStr(breakRem):"--:--"}</span>
+                </div>
+                {shared.betEnabled&&shared.betDeadline&&(
+                  <div style={{fontSize:11,color:G.orange}}>
+                    🎯 베팅 마감까지 {betRem!==null&&betRem>0?secToStr(betRem):"마감"}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 라운드 제어 */}
@@ -1698,6 +1834,72 @@ function AdminApp(){
                   <span style={{fontSize:12,color:G.gray1}}>배</span>
                 </div>}
               </div>
+            </div>
+
+            {/* 자동 진행 설정 */}
+            <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>자동 진행 설정</div>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>휴식 시간 (초)</div>
+                  <NumInput value={breakDuration} onChange={e=>setBreakDuration(parseInt(e.target.value)||30)}/>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>베팅 마감 (초)</div>
+                  <NumInput value={betWindow} onChange={e=>setBetWindow(parseInt(e.target.value)||15)}/>
+                </div>
+              </div>
+            </div>
+
+            {/* 방향 예측 베팅 설정 */}
+            <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>방향 예측 베팅</div>
+              <div style={{background:G.bg,borderRadius:10,padding:"10px 12px",marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:G.black}}>베팅 활성화</div>
+                    <div style={{fontSize:11,color:G.gray1}}>휴식 중 상승/하락 예측 베팅</div>
+                  </div>
+                  <div onClick={()=>setBetEnabled(v=>!v)}
+                    style={{width:44,height:26,borderRadius:13,background:betEnabled?G.orange:G.gray3,
+                      position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                    <div style={{width:22,height:22,borderRadius:"50%",background:G.white,position:"absolute",
+                      top:2,left:betEnabled?20:2,transition:"left .2s"}}/>
+                  </div>
+                </div>
+              </div>
+              {betEnabled&&<>
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>기본 배당률 (x)</div>
+                    <NumInput value={baseOdds} onChange={e=>setBaseOdds(parseFloat(e.target.value)||1.5)} style={{textAlign:"left"}}/>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>최소 베팅 (원)</div>
+                    <NumInput value={minBet} onChange={e=>setMinBet(parseInt(e.target.value)||10000)}/>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>최대 베팅 (현금의 %)</div>
+                    <NumInput value={maxBetPct} onChange={e=>setMaxBetPct(parseInt(e.target.value)||50)}/>
+                  </div>
+                </div>
+                <div style={{background:G.bg,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:G.black}}>다이나믹 배당률</div>
+                      <div style={{fontSize:11,color:G.gray1}}>베팅 비율에 따라 배당률 자동 조정</div>
+                    </div>
+                    <div onClick={()=>setDynamicOdds(v=>!v)}
+                      style={{width:44,height:26,borderRadius:13,background:dynamicOdds?G.purple:G.gray3,
+                        position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                      <div style={{width:22,height:22,borderRadius:"50%",background:G.white,position:"absolute",
+                        top:2,left:dynamicOdds?20:2,transition:"left .2s"}}/>
+                    </div>
+                  </div>
+                </div>
+              </>}
             </div>
             <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
               <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>라운드별 설정</div>
@@ -2175,6 +2377,21 @@ function UserApp(){
   const leverageEnabled=shared.leverageEnabled??false;
   const leverageMax=shared.leverageMax??2;
   const rem=useRoundTimer(shared.phase,shared.roundEndsAt);
+  const [breakRem,setBreakRem]=useState(null);
+  const [betRem,setBetRem]=useState(null);
+  const [betInputs,setBetInputs]=useState({});
+
+  useEffect(()=>{
+    if(shared.phase!=="break"||!shared.breakEndsAt){setBreakRem(null);setBetRem(null);return;}
+    const tick=()=>{
+      const now=Date.now();
+      setBreakRem(Math.max(0,Math.ceil((shared.breakEndsAt-now)/1000)));
+      setBetRem(shared.betDeadline?Math.max(0,Math.ceil((shared.betDeadline-now)/1000)):null);
+    };
+    tick();
+    const id=setInterval(tick,1000);
+    return()=>clearInterval(id);
+  },[shared.phase,shared.breakEndsAt,shared.betDeadline]);
 
   // 현재 라운드 블라인드 여부
   const isBlind=(shared.rounds?.[round-1]?.blind)||false;
@@ -2290,6 +2507,45 @@ function UserApp(){
       t2(`${s.name} ${effectiveQty}주 매도 완료`);
     }
     setQty(1);setLeverage(1);setConfirm(false);
+  };
+
+  const placeBet=async(stockId,direction,amount)=>{
+    const amt=parseInt(amount)||0;
+    const minB=shared.minBet||100000;
+    if(amt<minB){t2(`최소 베팅 ${fmt(minB)}`);return;}
+    const maxB=Math.floor(cash*((shared.maxBetPct||50)/100));
+    if(amt>maxB){t2(`최대 베팅 ${fmt(maxB)}`);return;}
+    const r=(shared.round||0)+1;
+    await setShared(s=>{
+      const tm=s.teams?.[teamId];
+      if(!tm) return s;
+      const existing=s.bets?.[r]?.[teamId]?.[stockId];
+      const refund=existing?existing.amount:0;
+      const netCost=amt-refund;
+      if(tm.cash<netCost) return s;
+      const newBets={
+        ...(s.bets||{}),
+        [r]:{
+          ...(s.bets?.[r]||{}),
+          [teamId]:{...(s.bets?.[r]?.[teamId]||{}),[stockId]:{direction,amount:amt}}
+        }
+      };
+      let upCount=0,downCount=0;
+      for(const [,tb] of Object.entries(newBets[r]||{})){
+        const b=tb[stockId];
+        if(b?.direction==="up") upCount++;
+        else if(b?.direction==="down") downCount++;
+      }
+      const base=s.baseOdds||1.8;
+      const total=upCount+downCount;
+      const upOdds=s.dynamicOdds&&total>0?Math.max(1.1,+(base*2*(downCount||0.5)/total).toFixed(2)):base;
+      const downOdds=s.dynamicOdds&&total>0?Math.max(1.1,+(base*2*(upCount||0.5)/total).toFixed(2)):base;
+      const newBetOdds={...(s.betOdds||{}),[stockId]:{upOdds,downOdds,upCount,downCount}};
+      const newTeams={...s.teams,[teamId]:{...tm,cash:tm.cash-netCost}};
+      return{...s,teams:newTeams,bets:newBets,betOdds:newBetOdds};
+    });
+    setBetInputs(b=>({...b,[stockId]:{direction,amount:""}}));
+    t2(`${direction==="up"?"▲상승":"▼하락"} ${fmt(amt)} 베팅 완료!`);
   };
 
   const buyShop=async(item)=>{
@@ -2704,6 +2960,8 @@ function UserApp(){
               {shared.phase==="ready"?"대기중":shared.phase==="round"?`Round ${shared.round}`:shared.phase==="break"?`R${shared.round} 종료`:"게임종료"}
             </div>
             {shared.phase==="round"&&rem!==null&&<div style={{fontSize:14,fontWeight:800,color:rem<=60?G.red:G.black,fontFamily:"monospace"}}>⏱ {secToStr(rem)}</div>}
+            {shared.phase==="break"&&breakRem!==null&&<div style={{fontSize:13,fontWeight:700,color:G.yellow,fontFamily:"monospace"}}>휴식 {secToStr(breakRem)}</div>}
+            {shared.phase==="break"&&betRem!==null&&betRem>0&&<div style={{fontSize:11,fontWeight:700,color:G.orange}}>🎯 베팅 {secToStr(betRem)}</div>}
           </div>
         </div>
         <div style={{display:"flex"}}>
@@ -2716,6 +2974,90 @@ function UserApp(){
 
       <div style={{paddingBottom:"env(safe-area-inset-bottom, 24px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
         {tab==="market"&&<>
+          {/* 휴식 중 배너 */}
+          {shared.phase==="break"&&(
+            <div style={{background:G.yellowLight,padding:"12px 18px",borderBottom:`1px solid ${G.border}`}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.yellow}}>
+                R{shared.round} 종료 — 휴식 중
+                {shared.breakEndsAt&&breakRem!==null&&<span style={{fontFamily:"monospace",marginLeft:8}}>{secToStr(breakRem)}</span>}
+              </div>
+              {(shared.round||0)<(shared.maxRound||3)&&<div style={{fontSize:11,color:G.gray1,marginTop:2}}>다음: R{(shared.round||0)+1}</div>}
+            </div>
+          )}
+
+          {/* 방향 예측 베팅 패널 */}
+          {shared.phase==="break"&&shared.betEnabled&&(
+            <div style={{background:G.white,margin:"10px 18px",borderRadius:14,padding:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:13,fontWeight:700,color:G.black}}>🎯 R{(shared.round||0)+1} 방향 예측 베팅</div>
+                <div style={{fontSize:11,fontWeight:700,color:betRem!==null&&betRem>0?G.orange:G.red}}>
+                  {betRem!==null&&betRem>0?`마감 ${secToStr(betRem)}`:"베팅 마감"}
+                </div>
+              </div>
+              {(shared.stocks||[]).filter(st=>st.listed!==false).map((st,si)=>{
+                const nextR=(shared.round||0)+1;
+                const oddsInfo=shared.betOdds?.[st.id];
+                const upOdds=oddsInfo?.upOdds??shared.baseOdds??1.8;
+                const downOdds=oddsInfo?.downOdds??shared.baseOdds??1.8;
+                const upCount=oddsInfo?.upCount??0;
+                const downCount=oddsInfo?.downCount??0;
+                const myBet=shared.bets?.[nextR]?.[teamId]?.[st.id];
+                const localBet=betInputs[st.id]||{direction:myBet?.direction||null,amount:""};
+                const canBet=betRem!==null&&betRem>0;
+                return(
+                  <div key={st.id} style={{marginBottom:12,paddingBottom:12,
+                    borderBottom:si<(shared.stocks||[]).filter(x=>x.listed!==false).length-1?`1px solid ${G.border}`:"none"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <span style={{fontSize:18}}>{st.emoji}</span>
+                      <span style={{fontSize:13,fontWeight:700,color:G.black}}>{st.name}</span>
+                      {myBet&&(
+                        <span style={{fontSize:10,borderRadius:4,padding:"1px 6px",fontWeight:600,
+                          background:myBet.direction==="up"?G.redLight:G.blueLight,
+                          color:myBet.direction==="up"?G.red:G.blue}}>
+                          {myBet.direction==="up"?"▲":"▼"} {fmt(myBet.amount)}
+                        </span>
+                      )}
+                    </div>
+                    {canBet&&<>
+                      <div style={{display:"flex",gap:6,marginBottom:6}}>
+                        <div onClick={()=>setBetInputs(b=>({...b,[st.id]:{...(b[st.id]||{}),direction:"up"}}))}
+                          style={{flex:1,padding:"8px",borderRadius:8,textAlign:"center",cursor:"pointer",fontWeight:700,fontSize:13,
+                            background:localBet.direction==="up"?G.red:G.redLight,
+                            color:localBet.direction==="up"?G.white:G.red}}>
+                          ▲ 상승 {(+upOdds).toFixed(1)}x
+                        </div>
+                        <div onClick={()=>setBetInputs(b=>({...b,[st.id]:{...(b[st.id]||{}),direction:"down"}}))}
+                          style={{flex:1,padding:"8px",borderRadius:8,textAlign:"center",cursor:"pointer",fontWeight:700,fontSize:13,
+                            background:localBet.direction==="down"?G.blue:G.blueLight,
+                            color:localBet.direction==="down"?G.white:G.blue}}>
+                          ▼ 하락 {(+downOdds).toFixed(1)}x
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <NumInput value={localBet.amount}
+                          onChange={e=>setBetInputs(b=>({...b,[st.id]:{...(b[st.id]||{}),amount:e.target.value}}))}
+                          style={{flex:1}}/>
+                        <Btn onClick={()=>{
+                          if(!localBet.direction){t2("방향을 선택해주세요");return;}
+                          placeBet(st.id,localBet.direction,localBet.amount);
+                        }} color={G.orange} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>베팅</Btn>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:10,color:G.gray2}}>
+                        <span>▲ {upCount}팀 참여</span>
+                        <span>▼ {downCount}팀 참여</span>
+                      </div>
+                    </>}
+                    {!canBet&&myBet&&(
+                      <div style={{fontSize:11,color:G.gray1,padding:"4px 0"}}>
+                        {myBet.direction==="up"?"▲ 상승":"▼ 하락"} {fmt(myBet.amount)} 베팅 완료 — 결과 대기 중
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div style={{padding:"10px 18px 5px",fontSize:12,color:G.gray1,fontWeight:500}}>
             종목 현황 {shared.phase==="round"?`· Round ${shared.round}`:""}
             {isBlind&&<span style={{color:G.purple,marginLeft:6}}>🙈 블라인드</span>}
