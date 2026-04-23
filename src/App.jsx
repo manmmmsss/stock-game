@@ -1149,6 +1149,84 @@ function useRoundTimer(phase, roundEndsAt) {
   return rem;
 }
 
+function BetResultPopup({ data, onClose }) {
+  if (!data) return null;
+  const { results, totalPnl } = data;
+  const allFail = results.every(r => !r.success);
+  const headerBg = allFail ? '#F04452' : totalPnl >= 0 ? '#00B493' : '#F5A623';
+  const emoji = allFail ? '📉' : totalPnl > 0 ? '🎯' : '😅';
+  const title = allFail ? '예측 실패' : totalPnl > 0 ? '예측 적중!' : '부분 적중';
+  const subtitle = `Round ${data.round} 베팅 결과`;
+  return (
+    <div style={{
+      position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+      zIndex:2000,display:"flex",alignItems:"center",
+      justifyContent:"center",padding:"0 20px",
+    }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:G.white,borderRadius:20,width:"100%",
+        maxWidth:340,overflow:"hidden",
+        border:`1px solid ${G.border}`,
+        animation:"popupIn 0.25s cubic-bezier(.34,1.56,.64,1)",
+      }}>
+        <style>{`
+          @keyframes popupIn {
+            from { opacity:0; transform:scale(0.85) translateY(20px); }
+            to   { opacity:1; transform:scale(1) translateY(0); }
+          }
+        `}</style>
+        <div style={{background:headerBg,padding:"28px 24px 20px",textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:8}}>{emoji}</div>
+          <div style={{fontSize:19,fontWeight:800,color:G.white,marginBottom:4}}>{title}</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.75)"}}>{subtitle}</div>
+        </div>
+        <div style={{padding:"18px 20px 0"}}>
+          <div style={{fontSize:12,color:G.gray1,fontWeight:600,marginBottom:10}}>베팅 내역</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            {results.map((r,i)=>(
+              <div key={i} style={{
+                background:r.success?G.greenLight:G.redLight,
+                borderRadius:12,padding:"11px 14px",
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+              }}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:3}}>
+                    {r.stockEmoji} {r.stockName}
+                  </div>
+                  <div style={{fontSize:11,color:r.success?G.green:G.red}}>
+                    {r.direction==="up"?"▲ 상승":"▼ 하락"} 예측
+                    {r.success?" → 적중!":" → 빗나감"}
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  {r.success&&<div style={{fontSize:11,color:G.gray1,marginBottom:2}}>x{r.odds}배</div>}
+                  <div style={{fontSize:14,fontWeight:700,color:r.success?G.green:G.red}}>
+                    {r.success?"+":"-"}{fmt(r.success?r.payout-r.amount:r.amount)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{borderTop:`1px solid ${G.border}`,paddingTop:14,marginBottom:18}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:14,fontWeight:700,color:G.black}}>최종 손익</span>
+              <span style={{fontSize:18,fontWeight:800,color:totalPnl>=0?G.green:G.red}}>
+                {totalPnl>=0?"+":""}{fmt(totalPnl)}
+              </span>
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            width:"100%",background:G.blue,color:G.white,
+            border:"none",borderRadius:12,padding:"14px",
+            fontSize:15,fontWeight:700,cursor:"pointer",
+            fontFamily:"inherit",marginBottom:20,
+          }}>확인</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════
    관리자 앱
 ══════════════════════════════════════════ */
@@ -2419,6 +2497,34 @@ function UserApp(){
     // 게임 종료 시만 화면 전환, detail 화면은 절대 건드리지 않음
     if((screen==="main"||screen==="detail")&&shared.phase==="ended") setScreen("ended");
     if(screen==="ended"&&(shared.phase==="ready"||shared.phase==="round")) setScreen("main");
+
+    // 라운드 종료 시 베팅 결과 팝업
+    if(shared.phase==="break"&&teamId){
+      const myBets=shared.bets?.[shared.round]?.[teamId];
+      if(myBets&&Object.keys(myBets).length>0){
+        const results=[];
+        let totalPnl=0;
+        for(const [stockId,bet] of Object.entries(myBets)){
+          if(!bet) continue;
+          const stock=shared.stocks?.find(s=>s.id===stockId);
+          if(!stock) continue;
+          const ri=Math.min(shared.round-1,stock.prices.length-1);
+          const startP=ri>0?stock.prices[ri-1]:stock.prices[0];
+          const endP=stock.prices[ri];
+          const actualDir=endP>startP?"up":endP<startP?"down":"draw";
+          const success=actualDir===bet.direction&&actualDir!=="draw";
+          const odds=bet.odds||shared.betOdds?.[stockId]?.[bet.direction==="up"?"upOdds":"downOdds"]||1.8;
+          const payout=success?Math.round(bet.amount*odds):0;
+          totalPnl+=success?payout-bet.amount:-bet.amount;
+          results.push({
+            stockId,stockName:stock.name,stockEmoji:stock.emoji,
+            direction:bet.direction,amount:bet.amount,
+            success,payout,odds,actualDir,
+          });
+        }
+        if(results.length>0) setBetResultPopup({results,totalPnl,round:shared.round});
+      }
+    }
   },[shared.phase]);
 
   useEffect(() => {
@@ -2460,33 +2566,6 @@ function UserApp(){
   const [betRem,setBetRem]=useState(null);
   const [betInputs,setBetInputs]=useState({});
   const [betResultPopup,setBetResultPopup]=useState(null);
-  const prevPhaseRef=useRef(null);
-
-  // 라운드 종료 시 베팅 결과 팝업
-  useEffect(()=>{
-    const prev=prevPhaseRef.current;
-    prevPhaseRef.current=shared.phase;
-    if(prev==="round"&&shared.phase==="break"&&shared.betEnabled&&teamId){
-      const r=shared.round;
-      const myBets=shared.bets?.[r]?.[teamId]||{};
-      const results=[];
-      for(const [sid,bet] of Object.entries(myBets)){
-        if(!bet) continue;
-        const stock=shared.stocks?.find(x=>x.id===sid);
-        if(!stock) continue;
-        const ri=Math.min(r-1,stock.prices.length-1);
-        const mod=shared.modifiedTargets?.[sid];
-        const targetP=(mod&&mod.round===r)?mod.modifiedPrice:stock.prices[ri];
-        const startP=ri>0?stock.prices[ri-1]:stock.prices[0];
-        const actualDir=targetP>=startP?"up":"down";
-        const won=bet.direction===actualDir;
-        const odds=bet.odds||(shared.baseOdds||1.8);
-        const payout=won?Math.round(bet.amount*odds):0;
-        results.push({stock,bet,actualDir,won,payout});
-      }
-      if(results.length>0) setBetResultPopup({round:r,results});
-    }
-  },[shared.phase,shared.round,shared.bets,shared.betEnabled,shared.stocks,shared.modifiedTargets,teamId]);
 
   useEffect(()=>{
     if(shared.phase!=="break"||!shared.breakEndsAt){setBreakRem(null);setBetRem(null);return;}
@@ -3048,6 +3127,7 @@ function UserApp(){
             </div>
           )}
         </div>
+        <BetResultPopup data={betResultPopup} onClose={()=>setBetResultPopup(null)}/>
         <Toast {...toast}/>
       </div>
     );
@@ -3056,40 +3136,6 @@ function UserApp(){
   /* ── 메인 ── */
   return(
     <div style={W.wrap}>
-      {betResultPopup&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:G.white,borderRadius:20,padding:24,width:"100%",maxWidth:380,maxHeight:"80vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.22)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div style={{fontSize:16,fontWeight:800,color:G.black}}>🎯 R{betResultPopup.round} 베팅 결과</div>
-              <div onClick={()=>setBetResultPopup(null)} style={{cursor:"pointer",fontSize:20,color:G.gray1,lineHeight:1,padding:"0 4px"}}>✕</div>
-            </div>
-            {betResultPopup.results.map(({stock,bet,actualDir,won,payout})=>(
-              <div key={stock.id} style={{background:won?G.redLight:G.blueLight,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                  <span style={{fontSize:20}}>{stock.emoji}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:G.black}}>{stock.name}</span>
-                  <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:6,
-                    background:won?"#ef4444":"#3b82f6",color:"#fff"}}>{won?"✓ 적중":"✗ 미적중"}</span>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:G.gray1,marginBottom:4}}>
-                  <span>내 예측 <b style={{color:bet.direction==="up"?G.red:G.blue}}>{bet.direction==="up"?"▲ 상승":"▼ 하락"}</b></span>
-                  <span>실제 <b style={{color:actualDir==="up"?G.red:G.blue}}>{actualDir==="up"?"▲ 상승":"▼ 하락"}</b></span>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
-                  <span style={{color:G.gray2}}>베팅 금액: <b style={{color:G.black}}>{fmt(bet.amount)}</b></span>
-                  <span style={{color:won?G.red:G.gray2,fontWeight:700}}>{won?`+${fmt(payout)}`:"0원"}</span>
-                </div>
-              </div>
-            ))}
-            <div style={{marginTop:4,padding:"10px 0 0",borderTop:`1px solid ${G.border}`,display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700}}>
-              <span style={{color:G.gray1}}>총 수익</span>
-              <span style={{color:betResultPopup.results.reduce((a,r)=>a+r.payout,0)>0?G.red:G.gray1}}>
-                +{fmt(betResultPopup.results.reduce((a,r)=>a+r.payout,0))}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
       <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
         side={orderSide} stock={detail} qty={effectiveQty} price={orderPrice} fee={feeRate} leverage={leverage}/>
       <div style={{background:G.white,padding:"env(safe-area-inset-top, 16px) 18px 0",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
@@ -3598,6 +3644,7 @@ function UserApp(){
           </div>
         </>
       )}
+      <BetResultPopup data={betResultPopup} onClose={()=>setBetResultPopup(null)}/>
       <Toast {...toast}/>
     </div>
   );
