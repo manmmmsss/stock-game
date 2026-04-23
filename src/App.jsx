@@ -1092,15 +1092,21 @@ function useRoundTimer(phase, roundEndsAt) {
   const [rem, setRem] = useState(null);
   useEffect(() => {
     if (phase !== "round" || !roundEndsAt) { setRem(null); return; }
+    let id;
     const tick = () => {
       const s = Math.max(0, Math.round((roundEndsAt - Date.now()) / 1000));
       setRem(s);
       if (s <= 0) {
-        setShared(ss => ({ ...ss, phase: "break", roundEndsAt: null, roundStartedAt: null }));
+        clearInterval(id); // 한 번만 실행 — 반복 호출 방지
+        setShared(ss => {
+          // 이미 다른 라운드가 시작됐으면 덮어쓰지 않음
+          if (ss.roundEndsAt !== roundEndsAt) return ss;
+          return { ...ss, phase: "break", roundEndsAt: null, roundStartedAt: null };
+        });
       }
     };
     tick();
-    const id = setInterval(tick, 1000);
+    id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [phase, roundEndsAt]);
   return rem;
