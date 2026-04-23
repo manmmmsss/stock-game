@@ -514,8 +514,8 @@ function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent,
   const fine = Math.sin(now * 0.0031 + slotSeed2 * 0.0001) * 0.5
              + Math.sin(now * 0.0071 + slotSeed2 * 0.0002) * 0.5;
 
-  // 노이즈 범위: 시작~목표가 차이의 20% (종료 시 0으로 수렴)
-  const noiseRange = Math.abs(target - prev) * 0.20 * noiseDecay;
+  // 노이즈 범위: 시작~목표가 차이의 20% + 목표가의 1% (1라운드 등 prev=target 시 최소 진동 보장)
+  const noiseRange = (Math.abs(target - prev) * 0.20 + target * 0.01) * noiseDecay;
 
   let price = Math.round(base + walkNorm * noiseRange * 0.6 + fine * noiseRange * 0.4);
 
@@ -2386,6 +2386,34 @@ function UserApp(){
   const [breakRem,setBreakRem]=useState(null);
   const [betRem,setBetRem]=useState(null);
   const [betInputs,setBetInputs]=useState({});
+  const [betResultPopup,setBetResultPopup]=useState(null);
+  const prevPhaseRef=useRef(null);
+
+  // 라운드 종료 시 베팅 결과 팝업
+  useEffect(()=>{
+    const prev=prevPhaseRef.current;
+    prevPhaseRef.current=shared.phase;
+    if(prev==="round"&&shared.phase==="break"&&shared.betEnabled&&teamId){
+      const r=shared.round;
+      const myBets=shared.bets?.[r]?.[teamId]||{};
+      const results=[];
+      for(const [sid,bet] of Object.entries(myBets)){
+        if(!bet) continue;
+        const stock=shared.stocks?.find(x=>x.id===sid);
+        if(!stock) continue;
+        const ri=Math.min(r-1,stock.prices.length-1);
+        const mod=shared.modifiedTargets?.[sid];
+        const targetP=(mod&&mod.round===r)?mod.modifiedPrice:stock.prices[ri];
+        const startP=ri>0?stock.prices[ri-1]:stock.prices[0];
+        const actualDir=targetP>=startP?"up":"down";
+        const won=bet.direction===actualDir;
+        const odds=bet.odds||(shared.baseOdds||1.8);
+        const payout=won?Math.round(bet.amount*odds):0;
+        results.push({stock,bet,actualDir,won,payout});
+      }
+      if(results.length>0) setBetResultPopup({round:r,results});
+    }
+  },[shared.phase,shared.round,shared.bets,shared.betEnabled,shared.stocks,shared.modifiedTargets,teamId]);
 
   useEffect(()=>{
     if(shared.phase!=="break"||!shared.breakEndsAt){setBreakRem(null);setBetRem(null);return;}
@@ -2529,11 +2557,22 @@ function UserApp(){
       const refund=existing?existing.amount:0;
       const netCost=amt-refund;
       if(tm.cash<netCost) return s;
+      let upCount0=0,downCount0=0;
+      for(const [,tb] of Object.entries(s.bets?.[r]||{})){
+        const b=tb[stockId];
+        if(b?.direction==="up") upCount0++;
+        else if(b?.direction==="down") downCount0++;
+      }
+      const base0=s.baseOdds||1.8;
+      const total0=upCount0+downCount0||1;
+      const betOddsUp0=s.dynamicOdds?Math.max(1.1,+(base0*2*(downCount0||0.5)/total0).toFixed(2)):base0;
+      const betOddsDown0=s.dynamicOdds?Math.max(1.1,+(base0*2*(upCount0||0.5)/total0).toFixed(2)):base0;
+      const storedOdds=direction==="up"?betOddsUp0:betOddsDown0;
       const newBets={
         ...(s.bets||{}),
         [r]:{
           ...(s.bets?.[r]||{}),
-          [teamId]:{...(s.bets?.[r]?.[teamId]||{}),[stockId]:{direction,amount:amt}}
+          [teamId]:{...(s.bets?.[r]?.[teamId]||{}),[stockId]:{direction,amount:amt,odds:storedOdds}}
         }
       };
       let upCount=0,downCount=0;
@@ -2943,6 +2982,40 @@ function UserApp(){
   /* ── 메인 ── */
   return(
     <div style={W.wrap}>
+      {betResultPopup&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:G.white,borderRadius:20,padding:24,width:"100%",maxWidth:380,maxHeight:"80vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.22)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontSize:16,fontWeight:800,color:G.black}}>🎯 R{betResultPopup.round} 베팅 결과</div>
+              <div onClick={()=>setBetResultPopup(null)} style={{cursor:"pointer",fontSize:20,color:G.gray1,lineHeight:1,padding:"0 4px"}}>✕</div>
+            </div>
+            {betResultPopup.results.map(({stock,bet,actualDir,won,payout})=>(
+              <div key={stock.id} style={{background:won?G.redLight:G.blueLight,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{fontSize:20}}>{stock.emoji}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:G.black}}>{stock.name}</span>
+                  <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:6,
+                    background:won?"#ef4444":"#3b82f6",color:"#fff"}}>{won?"✓ 적중":"✗ 미적중"}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:G.gray1,marginBottom:4}}>
+                  <span>내 예측 <b style={{color:bet.direction==="up"?G.red:G.blue}}>{bet.direction==="up"?"▲ 상승":"▼ 하락"}</b></span>
+                  <span>실제 <b style={{color:actualDir==="up"?G.red:G.blue}}>{actualDir==="up"?"▲ 상승":"▼ 하락"}</b></span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
+                  <span style={{color:G.gray2}}>베팅 금액: <b style={{color:G.black}}>{fmt(bet.amount)}</b></span>
+                  <span style={{color:won?G.red:G.gray2,fontWeight:700}}>{won?`+${fmt(payout)}`:"0원"}</span>
+                </div>
+              </div>
+            ))}
+            <div style={{marginTop:4,padding:"10px 0 0",borderTop:`1px solid ${G.border}`,display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700}}>
+              <span style={{color:G.gray1}}>총 수익</span>
+              <span style={{color:betResultPopup.results.reduce((a,r)=>a+r.payout,0)>0?G.red:G.gray1}}>
+                +{fmt(betResultPopup.results.reduce((a,r)=>a+r.payout,0))}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
         side={orderSide} stock={detail} qty={effectiveQty} price={orderPrice} fee={feeRate} leverage={leverage}/>
       <div style={{background:G.white,padding:"env(safe-area-inset-top, 16px) 18px 0",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
@@ -3017,10 +3090,9 @@ function UserApp(){
                       <span style={{fontSize:18}}>{st.emoji}</span>
                       <span style={{fontSize:13,fontWeight:700,color:G.black}}>{st.name}</span>
                       {myBet&&(
-                        <span style={{fontSize:10,borderRadius:4,padding:"1px 6px",fontWeight:600,
-                          background:myBet.direction==="up"?G.redLight:G.blueLight,
-                          color:myBet.direction==="up"?G.red:G.blue}}>
-                          {myBet.direction==="up"?"▲":"▼"} {fmt(myBet.amount)}
+                        <span style={{fontSize:11,borderRadius:6,padding:"3px 9px",fontWeight:700,
+                          background:myBet.direction==="up"?G.red:G.blue,color:"#fff"}}>
+                          {myBet.direction==="up"?"▲":"▼"} {fmt(myBet.amount)} 베팅
                         </span>
                       )}
                     </div>
