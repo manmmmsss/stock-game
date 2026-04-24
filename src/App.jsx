@@ -154,6 +154,7 @@ const useShared = () => {
             if (!tm.purchases) val.teams[tid].purchases = [];
             if (!tm.holdings) val.teams[tid].holdings = {};
             if (tm.borrowed === undefined) val.teams[tid].borrowed = 0;
+            if (tm.points === undefined) val.teams[tid].points = 0;
           }
         }
         // _empty 플래그 제거
@@ -463,6 +464,7 @@ const INIT_SS={
   bets: {},
   betOdds: {},
   eventSnapshots: {},
+  pointsEnabled: true,
 };
 
 
@@ -1267,6 +1269,8 @@ function AdminApp(){
   const [maxBetPct,setMaxBetPct]=useState(50);
   const [breakRem,setBreakRem]=useState(null);
   const [betRem,setBetRem]=useState(null);
+  const [pointInputs,setPointInputs]=useState({});
+  const [allPointInput,setAllPointInput]=useState("");
 
   // shared → 로컬 설정 동기화
   useEffect(()=>{
@@ -1368,7 +1372,7 @@ function AdminApp(){
   const clearDividend=(rid,sid)=>setRounds(p=>p.map(r=>{if(r.id!==rid)return r;const d={...(r.dividends||{})};delete d[sid];return{...r,dividends:d};}));
 
   // 상점 CRUD
-  const addShop=()=>setShopItems(p=>[...p,{id:uid(),name:"새 항목",desc:"설명",price:500000,emoji:"🎁",hint:"힌트 입력"}]);
+  const addShop=()=>setShopItems(p=>[...p,{id:uid(),name:"새 항목",desc:"설명",price:500000,pointPrice:50,emoji:"🎁",hint:"힌트 입력"}]);
   const delShop=id=>setShopItems(p=>p.filter(s=>s.id!==id));
   const updShop=(id,k,v)=>setShopItems(p=>p.map(s=>s.id===id?{...s,[k]:v}:s));
 
@@ -1395,11 +1399,33 @@ function AdminApp(){
     if(shared.teamCredentials?.[name]){t2("이미 있는 팀 이름");return;}
     const id=uid();
     setShared(s=>({...s,teamCredentials:{...(s.teamCredentials||{}),[name]:{id,pw}},
-      teams:{...s.teams,[id]:{name,cash:s.initCash||DEFAULT_INIT_CASH,holdings:{},purchases:[],history:[],borrowed:0}}}));
+      teams:{...s.teams,[id]:{name,cash:s.initCash||DEFAULT_INIT_CASH,holdings:{},purchases:[],history:[],borrowed:0,points:0}}}));
     setNewTeamName("");setNewTeamPw("");t2(`팀 "${name}" 등록`);
   };
   const delTeam=name=>{
     setShared(s=>{const c={...(s.teamCredentials||{})};const id=c[name]?.id;delete c[name];const t={...s.teams};if(id)delete t[id];return{...s,teamCredentials:c,teams:t};});
+  };
+
+  const givePoints=(tid,name)=>{
+    const amount=parseInt(pointInputs[tid])||0;
+    if(!amount||amount<=0){t2("포인트를 입력하세요");return;}
+    setShared(s=>({...s,teams:{...s.teams,[tid]:{...s.teams[tid],points:(s.teams[tid]?.points||0)+amount}}}));
+    setPointInputs(p=>({...p,[tid]:""}));
+    t2(`${name}팀에 ${amount}P 지급`);
+  };
+
+  const givePointsAll=()=>{
+    const amount=parseInt(allPointInput)||0;
+    if(!amount){t2("포인트를 입력하세요");return;}
+    setShared(s=>{
+      const teams={...s.teams};
+      for(const tid of Object.keys(teams)){
+        teams[tid]={...teams[tid],points:(teams[tid]?.points||0)+amount};
+      }
+      return{...s,teams};
+    });
+    setAllPointInput("");
+    t2(`전체 팀에 ${amount}P 지급`);
   };
 
   // 라운드 제어
@@ -1581,6 +1607,7 @@ function AdminApp(){
       // Firebase가 빈 {}를 삭제하므로 _reset 플래그로 표시
       const freshTeams = {};
       for (const [name, { id, pw }] of Object.entries(savedCreds)) {
+        const existingPoints = current.teams?.[id]?.points || 0;
         freshTeams[id] = {
           name,
           cash: savedCash,
@@ -1589,6 +1616,7 @@ function AdminApp(){
           history: ["_empty"],
           borrowed: 0,
           pw,
+          points: existingPoints,       // 포인트는 게임 초기화해도 유지
         };
       }
 
@@ -2160,6 +2188,11 @@ function AdminApp(){
                     <div style={{fontSize:11,color:G.gray2,flexShrink:0,width:36}}>가격</div>
                     <NumInput value={item.price} onChange={e=>updShop(item.id,"price",parseInt(e.target.value)||0)} style={{textAlign:"left"}}/>
                   </div>
+                  <div style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
+                    <div style={{fontSize:11,color:G.purple,flexShrink:0,width:60}}>포인트가</div>
+                    <NumInput value={item.pointPrice||0} onChange={e=>updShop(item.id,"pointPrice",parseInt(e.target.value)||0)} style={{textAlign:"left"}}/>
+                    <span style={{fontSize:11,color:G.purple}}>P</span>
+                  </div>
                   <div style={{marginBottom:6}}>
                     <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>구매 전 설명</div>
                     <TextInput value={item.desc} onChange={e=>updShop(item.id,"desc",e.target.value)} placeholder="구매 전 보이는 설명"/>
@@ -2297,6 +2330,17 @@ function AdminApp(){
               <Btn onClick={addTeam} style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>등록</Btn>
             </div>
           </div>
+          {/* 전체 포인트 지급 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💎 전체 팀 포인트 지급</div>
+            <div style={{display:"flex",gap:8}}>
+              <NumInput value={allPointInput} onChange={e=>setAllPointInput(e.target.value)}
+                placeholder="포인트 입력" style={{flex:1,textAlign:"left"}}/>
+              <Btn onClick={givePointsAll} color={G.purple}
+                style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>전체 지급</Btn>
+            </div>
+          </div>
+
           <div style={{background:G.white,borderRadius:14,padding:14}}>
             <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>등록된 팀 ({Object.keys(shared.teamCredentials||{}).length}팀)</div>
             {Object.keys(shared.teamCredentials||{}).length===0
@@ -2304,13 +2348,24 @@ function AdminApp(){
               :Object.entries(shared.teamCredentials||{}).map(([name,{id,pw}])=>{
                 const tm=shared.teams?.[id];
                 return(
-                  <div key={name} style={{padding:"10px 0",borderBottom:`1px solid ${G.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:700,color:G.black}}>{name}</div>
-                      <div style={{fontSize:11,color:G.gray2,fontFamily:"monospace",marginTop:1}}>PW: {pw}</div>
-                      {tm&&<div style={{fontSize:11,color:G.gray1,marginTop:1}}>현금: {fmt(tm.cash||0)}</div>}
+                  <div key={name} style={{padding:"12px 0",borderBottom:`1px solid ${G.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:G.black}}>{name}</div>
+                        <div style={{fontSize:11,color:G.gray2,fontFamily:"monospace"}}>PW: {pw}</div>
+                        <div style={{display:"flex",gap:8,marginTop:3}}>
+                          {tm&&<div style={{fontSize:11,color:G.gray1}}>현금 {fmt(tm.cash||0)}</div>}
+                          {tm&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {tm.points||0}P</div>}
+                        </div>
+                      </div>
+                      <div onClick={()=>delTeam(name)} style={{padding:"5px 10px",borderRadius:7,background:G.redLight,color:G.red,cursor:"pointer",fontSize:12,fontWeight:600}}>삭제</div>
                     </div>
-                    <div onClick={()=>delTeam(name)} style={{padding:"5px 10px",borderRadius:7,background:G.redLight,color:G.red,cursor:"pointer",fontSize:12,fontWeight:600}}>삭제</div>
+                    <div style={{display:"flex",gap:6}}>
+                      <NumInput value={pointInputs[id]||""} onChange={e=>setPointInputs(p=>({...p,[id]:e.target.value}))}
+                        placeholder="포인트" style={{flex:1,textAlign:"left"}}/>
+                      <Btn onClick={()=>givePoints(id,name)} color={G.purple}
+                        style={{flexShrink:0,padding:"8px 12px",fontSize:12}}>지급</Btn>
+                    </div>
                   </div>
                 );
               })
@@ -2765,9 +2820,11 @@ function UserApp(){
   const buyShop=async(item)=>{
     const latest=(shared.shopItems||[]).find(x=>x.id===item.id)||item;
     if(purchases.includes(latest.id)){t2("이미 구매한 항목");return;}
-    if(cash<latest.price){t2("잔액 부족");return;}
-    await updTeam(t=>({...t,cash:t.cash-latest.price,purchases:[...(t.purchases||[]),latest.id]}));
-    t2(`${latest.name} 구매 완료!`);
+    const pointCost=latest.pointPrice||Math.round((latest.price||0)/10000);
+    const myPoints=myTeam?.points||0;
+    if(myPoints<pointCost){t2("포인트 부족");return;}
+    await updTeam(t=>({...t,points:(t.points||0)-pointCost,purchases:[...(t.purchases||[]),latest.id]}));
+    t2(`${latest.name} 구매 완료! (-${pointCost}P)`);
   };
 
   const sendChat = () => {
@@ -3168,6 +3225,9 @@ function UserApp(){
             <div style={{fontSize:13,fontWeight:600,color:diff>=0?G.red:G.blue,marginTop:1}}>
               {diff>=0?"▲ +":"▼ "}{fmt(Math.abs(diff))} ({diff>=0?"+":""}{diffPct}%)
             </div>
+            {(myTeam?.points||0)>0&&(
+              <div style={{fontSize:12,color:G.purple,fontWeight:600,marginTop:2}}>💎 {myTeam.points}P 보유</div>
+            )}
           </div>
           <div style={{textAlign:"right"}}>
             <div style={{background:shared.phase==="round"?G.greenLight:shared.phase==="break"?G.yellowLight:G.gray4,
@@ -3382,14 +3442,20 @@ function UserApp(){
         </>}
 
         {tab==="shop"&&<>
-          <div style={{padding:"10px 18px 5px",fontSize:12,color:G.gray1,fontWeight:500}}>보유 현금 {fmt(cash)}</div>
+          <div style={{padding:"10px 18px 5px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:12,color:G.gray1,fontWeight:500}}>포인트 상점</div>
+            <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {myTeam?.points||0}P</div>
+          </div>
           <div style={{padding:"0 14px 8px"}}>
             <div style={{background:G.purpleLight,borderRadius:11,padding:"11px 13px",fontSize:13,color:G.purple,fontWeight:500,lineHeight:1.5}}>
-              💡 구매 즉시 힌트가 공개됩니다
+              💎 포인트로만 구매 가능한 특별 정보입니다
             </div>
           </div>
           {(shared.shopItems||[]).map(item=>{
             const bought=purchases.includes(item.id);
+            const pointCost=item.pointPrice||Math.round((item.price||0)/10000);
+            const myPoints=myTeam?.points||0;
+            const canAfford=myPoints>=pointCost;
             return(
               <div key={item.id} style={{background:G.white,marginBottom:1,padding:"15px 18px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
@@ -3400,14 +3466,14 @@ function UserApp(){
                       {bought&&<span style={{fontSize:11,background:G.greenLight,color:G.green,borderRadius:20,padding:"2px 8px",fontWeight:600}}>구매완료</span>}
                     </div>
                     <div style={{fontSize:12,color:G.gray1,marginBottom:6,lineHeight:1.5}}>{item.desc}</div>
-                    <div style={{fontSize:14,fontWeight:700,color:G.purple}}>{fmt(item.price)}</div>
+                    <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {pointCost}P</div>
                   </div>
-                  <button onClick={()=>buyShop(item)} disabled={bought||cash<item.price}
-                    style={{background:bought?G.greenLight:cash<item.price?G.bg:G.purple,
-                      color:bought?G.green:cash<item.price?G.gray2:G.white,
+                  <button onClick={()=>buyShop(item)} disabled={bought||!canAfford}
+                    style={{background:bought?G.greenLight:!canAfford?G.bg:G.purple,
+                      color:bought?G.green:!canAfford?G.gray2:G.white,
                       border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,
-                      cursor:bought||cash<item.price?"not-allowed":"pointer",fontFamily:"inherit",flexShrink:0}}>
-                    {bought?"✓":cash<item.price?"잔액부족":"구매"}
+                      cursor:bought||!canAfford?"not-allowed":"pointer",fontFamily:"inherit",flexShrink:0}}>
+                    {bought?"✓":!canAfford?"P부족":"구매"}
                   </button>
                 </div>
                 {bought&&(
