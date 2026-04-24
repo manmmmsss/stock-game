@@ -194,6 +194,16 @@ const useShared = () => {
         if (Array.isArray(val.eventHistory)) {
           val.eventHistory = val.eventHistory.filter(x => x !== "_empty" && typeof x === 'object');
         }
+        if (val.groups) {
+          for (const gname of Object.keys(val.groups)) {
+            const g = val.groups[gname];
+            if (g.memberIds && !Array.isArray(g.memberIds)) {
+              val.groups[gname].memberIds = Object.values(g.memberIds);
+            }
+            if (!g.memberIds) val.groups[gname].memberIds = [];
+            if (g.points === undefined) val.groups[gname].points = 0;
+          }
+        }
         if (val.bonusPool?._empty) val.bonusPool = {};
         if (val.priceHistory?._empty) val.priceHistory = {};
         if (val.modifiedTargets?._empty) val.modifiedTargets = {};
@@ -465,6 +475,7 @@ const INIT_SS={
   betOdds: {},
   eventSnapshots: {},
   pointsEnabled: true,
+  groups: {},
 };
 
 
@@ -1255,8 +1266,12 @@ function AdminApp(){
   const [bonusIn,setBonusIn]=useState({});
   const [noticeInput,setNoticeInput]=useState("");
   const [adminChatInput,setAdminChatInput]=useState("");
-  const [newTeamName,setNewTeamName]=useState("");
-  const [newTeamPw,setNewTeamPw]=useState("");
+  const [newGroupName,setNewGroupName]=useState("1조");
+  const [newMemberName,setNewMemberName]=useState("");
+  const [newMemberPw,setNewMemberPw]=useState("");
+  const [batchCount,setBatchCount]=useState(5);
+  const [pointGroupTarget,setPointGroupTarget]=useState("전체");
+  const [groupPointInput,setGroupPointInput]=useState("");
   const [saveTplName,setSaveTplName]=useState("");
   const [editingTpl,setEditingTpl]=useState(null);
   // 자동진행 / 베팅 설정
@@ -1269,8 +1284,6 @@ function AdminApp(){
   const [maxBetPct,setMaxBetPct]=useState(50);
   const [breakRem,setBreakRem]=useState(null);
   const [betRem,setBetRem]=useState(null);
-  const [pointInputs,setPointInputs]=useState({});
-  const [allPointInput,setAllPointInput]=useState("");
 
   // shared → 로컬 설정 동기화
   useEffect(()=>{
@@ -1285,10 +1298,11 @@ function AdminApp(){
 
   // 휴식 타이머 (표시용)
   useEffect(()=>{
-    if(shared.phase!=="break"||!shared.breakEndsAt){setBreakRem(null);setBetRem(null);return;}
+    if(shared.phase!=="break"){setBreakRem(null);setBetRem(null);return;}
+    if(!shared.breakEndsAt&&!shared.betDeadline){setBreakRem(null);setBetRem(null);return;}
     const tick=()=>{
       const now=Date.now();
-      setBreakRem(Math.max(0,Math.ceil((shared.breakEndsAt-now)/1000)));
+      setBreakRem(shared.breakEndsAt?Math.max(0,Math.ceil((shared.breakEndsAt-now)/1000)):null);
       setBetRem(shared.betDeadline?Math.max(0,Math.ceil((shared.betDeadline-now)/1000)):null);
     };
     tick();
@@ -1393,39 +1407,83 @@ function AdminApp(){
   };
 
   // 팀 계정
-  const addTeam=()=>{
-    const name=newTeamName.trim(),pw=newTeamPw.trim();
+  const addMember=()=>{
+    const name=newMemberName.trim(),pw=newMemberPw.trim(),group=newGroupName;
     if(!name||!pw){t2("이름과 비밀번호 입력");return;}
-    if(shared.teamCredentials?.[name]){t2("이미 있는 팀 이름");return;}
+    if(shared.teamCredentials?.[name]){t2("이미 있는 이름");return;}
     const id=uid();
-    setShared(s=>({...s,teamCredentials:{...(s.teamCredentials||{}),[name]:{id,pw}},
-      teams:{...s.teams,[id]:{name,cash:s.initCash||DEFAULT_INIT_CASH,holdings:{},purchases:[],history:[],borrowed:0,points:0}}}));
-    setNewTeamName("");setNewTeamPw("");t2(`팀 "${name}" 등록`);
-  };
-  const delTeam=name=>{
-    setShared(s=>{const c={...(s.teamCredentials||{})};const id=c[name]?.id;delete c[name];const t={...s.teams};if(id)delete t[id];return{...s,teamCredentials:c,teams:t};});
-  };
-
-  const givePoints=(tid,name)=>{
-    const amount=parseInt(pointInputs[tid])||0;
-    if(!amount||amount<=0){t2("포인트를 입력하세요");return;}
-    setShared(s=>({...s,teams:{...s.teams,[tid]:{...s.teams[tid],points:(s.teams[tid]?.points||0)+amount}}}));
-    setPointInputs(p=>({...p,[tid]:""}));
-    t2(`${name}팀에 ${amount}P 지급`);
+    setShared(s=>({
+      ...s,
+      teamCredentials:{...(s.teamCredentials||{}),[name]:{id,pw,groupName:group}},
+      teams:{...s.teams,[id]:{name,groupName:group,cash:s.initCash||DEFAULT_INIT_CASH,
+        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,points:0}},
+      groups:{...(s.groups||{}),[group]:{
+        points:(s.groups?.[group]?.points||0),
+        memberIds:[...(s.groups?.[group]?.memberIds||[]),id],
+      }},
+    }));
+    setNewMemberName("");setNewMemberPw("");
+    t2(`${group} - ${name} 등록`);
   };
 
-  const givePointsAll=()=>{
-    const amount=parseInt(allPointInput)||0;
+  const addBatch=()=>{
+    const group=newGroupName,count=batchCount;
+    if(!count||count<1){t2("인원을 입력하세요");return;}
+    const existingCount=Object.keys(shared.teamCredentials||{})
+      .filter(n=>n.startsWith(group+"-")).length;
+    const newCreds={},newTeams={},newMemberIds=[];
+    for(let i=1;i<=count;i++){
+      const num=existingCount+i;
+      const name=`${group}-${num}`;
+      if(shared.teamCredentials?.[name]) continue;
+      const id=uid();
+      const pw=Math.random().toString(36).slice(2,8);
+      newCreds[name]={id,pw,groupName:group};
+      newTeams[id]={name,groupName:group,cash:shared.initCash||DEFAULT_INIT_CASH,
+        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,points:0};
+      newMemberIds.push(id);
+    }
+    setShared(s=>({
+      ...s,
+      teamCredentials:{...(s.teamCredentials||{}),...newCreds},
+      teams:{...s.teams,...newTeams},
+      groups:{...(s.groups||{}),[group]:{
+        points:(s.groups?.[group]?.points||0),
+        memberIds:[...(s.groups?.[group]?.memberIds||[]),...newMemberIds],
+      }},
+    }));
+    t2(`${group} ${count}명 일괄 등록 완료`);
+  };
+
+  const delMember=(name,id,group)=>{
+    setShared(s=>{
+      const creds={...(s.teamCredentials||{})};
+      const grp={...(s.groups||{})};
+      delete creds[name];
+      if(grp[group]){
+        grp[group]={...grp[group],memberIds:(grp[group].memberIds||[]).filter(mid=>mid!==id)};
+      }
+      const teams={...s.teams};
+      delete teams[id];
+      return{...s,teamCredentials:creds,teams,groups:grp};
+    });
+  };
+
+  const giveGroupPoints=()=>{
+    const amount=parseInt(groupPointInput)||0;
     if(!amount){t2("포인트를 입력하세요");return;}
     setShared(s=>{
-      const teams={...s.teams};
-      for(const tid of Object.keys(teams)){
-        teams[tid]={...teams[tid],points:(teams[tid]?.points||0)+amount};
+      const groups={...(s.groups||{})};
+      const targets=pointGroupTarget==="전체"
+        ?Array.from({length:16},(_,i)=>`${i+1}조`)
+        :[pointGroupTarget];
+      for(const g of targets){
+        if(groups[g]) groups[g]={...groups[g],points:(groups[g].points||0)+amount};
       }
-      return{...s,teams};
+      return{...s,groups};
     });
-    setAllPointInput("");
-    t2(`전체 팀에 ${amount}P 지급`);
+    setGroupPointInput("");
+    t2(pointGroupTarget==="전체"?`전체 조에 ${amount}P 지급`:`${pointGroupTarget}에 ${amount}P 지급`);
   };
 
   // 라운드 제어
@@ -1606,10 +1664,11 @@ function AdminApp(){
       // 팀 완전 초기화
       // Firebase가 빈 {}를 삭제하므로 _reset 플래그로 표시
       const freshTeams = {};
-      for (const [name, { id, pw }] of Object.entries(savedCreds)) {
+      for (const [name, { id, pw, groupName }] of Object.entries(savedCreds)) {
         const existingPoints = current.teams?.[id]?.points || 0;
         freshTeams[id] = {
           name,
+          groupName: groupName || "",
           cash: savedCash,
           holdings: { _empty: true },  // Firebase 빈객체 방지용
           purchases: ["_empty"],        // Firebase 빈배열 방지용
@@ -1618,6 +1677,13 @@ function AdminApp(){
           pw,
           points: existingPoints,       // 포인트는 게임 초기화해도 유지
         };
+      }
+      // 조 포인트 유지, memberIds 유지
+      const savedGroups = {};
+      if (current.groups) {
+        for (const [g, v] of Object.entries(current.groups)) {
+          savedGroups[g] = { points: v.points || 0, memberIds: v.memberIds || [] };
+        }
       }
 
       const newState = {
@@ -1659,6 +1725,7 @@ function AdminApp(){
         betDeadline: 0,
         bets: { _empty: true },
         betOdds: { _empty: true },
+        groups: savedGroups,
       };
 
       await fbSet(GAME_REF, newState);
@@ -1669,14 +1736,26 @@ function AdminApp(){
     }
   };
 
-  const getRank=()=>Object.entries(shared.teams||{}).map(([id,tm])=>{
-    const r=Math.max(shared.round,1);
-    const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
-      const st=shared.stocks?.find(x=>x.id===sid);
-      return acc+(st?st.prices[Math.min(r-1,st.prices.length-1)]*h.qty:0);
-    },0);
-    return{id,name:tm.name,total:tm.cash+sv,bonus:shared.bonusPool?.[id]||0,borrowed:tm.borrowed||0};
-  }).sort((a,b)=>b.total-a.total);
+  const getGroupRank=()=>{
+    return Array.from({length:16},(_,i)=>`${i+1}조`).map(group=>{
+      const members=Object.entries(shared.teamCredentials||{})
+        .filter(([,v])=>v.groupName===group);
+      const r=Math.max(shared.round,1);
+      const totalAsset=members.reduce((sum,[,{id}])=>{
+        const tm=shared.teams?.[id];
+        if(!tm) return sum;
+        const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
+          if(sid==='_empty') return acc;
+          const st=shared.stocks?.find(x=>x.id===sid);
+          return acc+(st?st.prices[Math.min(r-1,st.prices.length-1)]*(h.qty||0):0);
+        },0);
+        return sum+(tm.cash||0)+sv;
+      },0);
+      const groupPoints=shared.groups?.[group]?.points||0;
+      const memberCount=members.length;
+      return{group,totalAsset,groupPoints,memberCount};
+    }).filter(g=>g.memberCount>0).sort((a,b)=>b.totalAsset-a.totalAsset);
+  };
 
   const phaseLabel=shared.phase==="ready"?"대기중":shared.phase==="round"?`R${shared.round} 진행중`:shared.phase==="break"?`R${shared.round} 종료`:"게임종료";
   const phaseBg=shared.phase==="round"?G.greenLight:shared.phase==="break"?G.yellowLight:shared.phase==="ended"?G.redLight:G.gray4;
@@ -2320,52 +2399,118 @@ function AdminApp(){
 
         {/* ══ 팀 관리 탭 ══ */}
         {tab==="teams"&&<>
+          {/* 개별 등록 */}
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>팀 계정 등록</div>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>팀원 계정 등록</div>
+            <select value={newGroupName} onChange={e=>setNewGroupName(e.target.value)}
+              style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,
+                padding:"9px 10px",fontSize:13,fontFamily:"inherit",outline:"none",
+                color:G.black,marginBottom:6}}>
+              {Array.from({length:16},(_,i)=>`${i+1}조`).map(g=>(
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
             <div style={{display:"flex",gap:6,marginBottom:6}}>
-              <TextInput value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} placeholder="팀 이름" style={{flex:1}}/>
+              <TextInput value={newMemberName} onChange={e=>setNewMemberName(e.target.value)}
+                placeholder="팀원 이름 (예: 홍길동)" style={{flex:1}}/>
             </div>
             <div style={{display:"flex",gap:6,marginBottom:10}}>
-              <TextInput value={newTeamPw} onChange={e=>setNewTeamPw(e.target.value)} placeholder="비밀번호" style={{flex:1}}/>
-              <Btn onClick={addTeam} style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>등록</Btn>
-            </div>
-          </div>
-          {/* 전체 포인트 지급 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💎 전체 팀 포인트 지급</div>
-            <div style={{display:"flex",gap:8}}>
-              <NumInput value={allPointInput} onChange={e=>setAllPointInput(e.target.value)}
-                placeholder="포인트 입력" style={{flex:1,textAlign:"left"}}/>
-              <Btn onClick={givePointsAll} color={G.purple}
-                style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>전체 지급</Btn>
+              <TextInput value={newMemberPw} onChange={e=>setNewMemberPw(e.target.value)}
+                placeholder="비밀번호" style={{flex:1}}/>
+              <Btn onClick={addMember} style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>등록</Btn>
             </div>
           </div>
 
+          {/* 일괄 등록 */}
+          <div style={{background:G.blueLight,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.blue,marginBottom:8}}>📋 일괄 등록</div>
+            <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
+              <select value={newGroupName} onChange={e=>setNewGroupName(e.target.value)}
+                style={{flex:1,border:`1.5px solid ${G.border}`,borderRadius:8,
+                  padding:"8px",fontSize:12,fontFamily:"inherit",outline:"none"}}>
+                {Array.from({length:16},(_,i)=>`${i+1}조`).map(g=>(
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+              <NumInput value={batchCount} onChange={e=>setBatchCount(parseInt(e.target.value)||1)}
+                placeholder="인원" style={{width:60}}/>
+              <span style={{fontSize:12,color:G.gray1,flexShrink:0}}>명</span>
+              <Btn onClick={addBatch} color={G.blue}
+                style={{flexShrink:0,padding:"8px 12px",fontSize:12}}>등록</Btn>
+            </div>
+            <div style={{fontSize:11,color:G.blue}}>예) 1조 5명 → 1조-1 ~ 1조-5 자동 생성</div>
+          </div>
+
+          {/* 조별 포인트 지급 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>💎 조별 포인트 지급</div>
+            <div style={{display:"flex",gap:8}}>
+              <select value={pointGroupTarget} onChange={e=>setPointGroupTarget(e.target.value)}
+                style={{flex:1,border:`1.5px solid ${G.border}`,borderRadius:8,
+                  padding:"9px 10px",fontSize:13,fontFamily:"inherit",outline:"none"}}>
+                <option value="전체">전체 조</option>
+                {Array.from({length:16},(_,i)=>`${i+1}조`).map(g=>(
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+              <NumInput value={groupPointInput} onChange={e=>setGroupPointInput(e.target.value)}
+                placeholder="포인트" style={{width:80,textAlign:"left"}}/>
+              <Btn onClick={giveGroupPoints} color={G.purple}
+                style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>지급</Btn>
+            </div>
+          </div>
+
+          {/* 조별 팀원 목록 */}
           <div style={{background:G.white,borderRadius:14,padding:14}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>등록된 팀 ({Object.keys(shared.teamCredentials||{}).length}팀)</div>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:12}}>
+              등록된 팀원 ({Object.keys(shared.teamCredentials||{}).length}명)
+            </div>
             {Object.keys(shared.teamCredentials||{}).length===0
-              ?<div style={{textAlign:"center",color:G.gray2,padding:"24px 0",fontSize:13}}>등록된 팀 없음</div>
-              :Object.entries(shared.teamCredentials||{}).map(([name,{id,pw}])=>{
-                const tm=shared.teams?.[id];
+              ?<div style={{textAlign:"center",color:G.gray2,padding:"24px 0",fontSize:13}}>등록된 팀원 없음</div>
+              :Array.from({length:16},(_,i)=>`${i+1}조`).map(group=>{
+                const members=Object.entries(shared.teamCredentials||{})
+                  .filter(([,v])=>v.groupName===group);
+                if(members.length===0) return null;
+                const r=Math.max(shared.round,1);
+                const groupAsset=members.reduce((sum,[,{id}])=>{
+                  const tm=shared.teams?.[id];
+                  if(!tm) return sum;
+                  const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
+                    if(sid==='_empty') return acc;
+                    const st=shared.stocks?.find(x=>x.id===sid);
+                    return acc+(st?st.prices[Math.min(r-1,st.prices.length-1)]*(h.qty||0):0);
+                  },0);
+                  return sum+(tm.cash||0)+sv;
+                },0);
+                const groupPoints=shared.groups?.[group]?.points||0;
                 return(
-                  <div key={name} style={{padding:"12px 0",borderBottom:`1px solid ${G.border}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                      <div>
-                        <div style={{fontSize:13,fontWeight:700,color:G.black}}>{name}</div>
-                        <div style={{fontSize:11,color:G.gray2,fontFamily:"monospace"}}>PW: {pw}</div>
-                        <div style={{display:"flex",gap:8,marginTop:3}}>
-                          {tm&&<div style={{fontSize:11,color:G.gray1}}>현금 {fmt(tm.cash||0)}</div>}
-                          {tm&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {tm.points||0}P</div>}
-                        </div>
+                  <div key={group} style={{marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div style={{fontSize:13,fontWeight:700,color:G.black}}>{group} ({members.length}명)</div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        {groupPoints>0&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {groupPoints}P</div>}
+                        <div style={{fontSize:11,color:G.gray1}}>합산 {fmt(groupAsset)}</div>
                       </div>
-                      <div onClick={()=>delTeam(name)} style={{padding:"5px 10px",borderRadius:7,background:G.redLight,color:G.red,cursor:"pointer",fontSize:12,fontWeight:600}}>삭제</div>
                     </div>
-                    <div style={{display:"flex",gap:6}}>
-                      <NumInput value={pointInputs[id]||""} onChange={e=>setPointInputs(p=>({...p,[id]:e.target.value}))}
-                        placeholder="포인트" style={{flex:1,textAlign:"left"}}/>
-                      <Btn onClick={()=>givePoints(id,name)} color={G.purple}
-                        style={{flexShrink:0,padding:"8px 12px",fontSize:12}}>지급</Btn>
-                    </div>
+                    {members.map(([name,{id,pw}])=>{
+                      const tm=shared.teams?.[id];
+                      return(
+                        <div key={name} style={{display:"flex",justifyContent:"space-between",
+                          alignItems:"center",padding:"6px 10px",background:G.bg,
+                          borderRadius:8,marginBottom:4}}>
+                          <div>
+                            <div style={{fontSize:12,fontWeight:600,color:G.black}}>{name}</div>
+                            <div style={{fontSize:10,color:G.gray2,fontFamily:"monospace"}}>PW: {pw}</div>
+                          </div>
+                          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                            {tm&&<div style={{fontSize:11,color:G.gray1}}>{fmt(tm.cash||0)}</div>}
+                            <div onClick={()=>delMember(name,id,group)}
+                              style={{padding:"3px 8px",borderRadius:6,background:G.redLight,
+                                color:G.red,cursor:"pointer",fontSize:11,fontWeight:600}}>삭제</div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })
@@ -2468,28 +2613,34 @@ function AdminApp(){
         {/* ══ 순위 탭 ══ */}
         {tab==="rank"&&(
           <div style={{background:G.white,borderRadius:14,padding:14}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:12}}>실시간 자산 순위</div>
-            {getRank().length===0
-              ?<div style={{textAlign:"center",color:G.gray2,padding:"32px 0"}}>참가 팀 없음</div>
-              :getRank().map((t,i)=>(
-                <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${G.border}`}}>
-                  <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,
-                    background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":G.gray4,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:12,fontWeight:700,color:i<3?G.white:G.gray1}}>{i+1}</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:14,fontWeight:700,color:G.black}}>{t.name}</div>
-                    {t.bonus>0&&<div style={{fontSize:11,color:G.yellow}}>보너스 +{fmt(t.bonus)}</div>}
-                    {t.borrowed>0&&<div style={{fontSize:11,color:G.orange}}>차입 {fmt(t.borrowed)}</div>}
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:14,fontWeight:800,color:G.black}}>{fmt(t.total)}</div>
-                    <div style={{fontSize:11,color:t.total>=(shared.initCash||DEFAULT_INIT_CASH)?G.red:G.blue}}>
-                      {t.total>=(shared.initCash||DEFAULT_INIT_CASH)?"+":""}{fmt(t.total-(shared.initCash||DEFAULT_INIT_CASH))}
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:12}}>조별 합산 자산 순위</div>
+            {getGroupRank().length===0
+              ?<div style={{textAlign:"center",color:G.gray2,padding:"32px 0"}}>등록된 조 없음</div>
+              :getGroupRank().map((g,i)=>{
+                const initTotal=(shared.initCash||DEFAULT_INIT_CASH)*g.memberCount;
+                const diff=g.totalAsset-initTotal;
+                return(
+                  <div key={g.group} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:`1px solid ${G.border}`}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,
+                      background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":G.gray4,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:12,fontWeight:700,color:i<3?G.white:G.gray1}}>{i+1}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:15,fontWeight:800,color:G.black}}>{g.group}</div>
+                      <div style={{fontSize:11,color:G.gray1}}>
+                        {g.memberCount}명 참여
+                        {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:6}}>💎 {g.groupPoints}P</span>}
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:15,fontWeight:800,color:G.black}}>{fmt(g.totalAsset)}</div>
+                      <div style={{fontSize:11,fontWeight:600,color:diff>=0?G.red:G.blue}}>
+                        {diff>=0?"+":""}{fmt(diff)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             }
           </div>
         )}
@@ -2630,10 +2781,11 @@ function UserApp(){
   const [betResultPopup,setBetResultPopup]=useState(null);
 
   useEffect(()=>{
-    if(shared.phase!=="break"||!shared.breakEndsAt){setBreakRem(null);setBetRem(null);return;}
+    if(shared.phase!=="break"){setBreakRem(null);setBetRem(null);return;}
+    if(!shared.breakEndsAt&&!shared.betDeadline){setBreakRem(null);setBetRem(null);return;}
     const tick=()=>{
       const now=Date.now();
-      setBreakRem(Math.max(0,Math.ceil((shared.breakEndsAt-now)/1000)));
+      setBreakRem(shared.breakEndsAt?Math.max(0,Math.ceil((shared.breakEndsAt-now)/1000)):null);
       setBetRem(shared.betDeadline?Math.max(0,Math.ceil((shared.betDeadline-now)/1000)):null);
     };
     tick();
@@ -2820,10 +2972,28 @@ function UserApp(){
   const buyShop=async(item)=>{
     const latest=(shared.shopItems||[]).find(x=>x.id===item.id)||item;
     if(purchases.includes(latest.id)){t2("이미 구매한 항목");return;}
-    const pointCost=latest.pointPrice||Math.round((latest.price||0)/10000);
-    const myPoints=myTeam?.points||0;
-    if(myPoints<pointCost){t2("포인트 부족");return;}
-    await updTeam(t=>({...t,points:(t.points||0)-pointCost,purchases:[...(t.purchases||[]),latest.id]}));
+    const pointCost=latest.pointPrice||50;
+    const myGroupName=shared.teamCredentials?.[teamName]?.groupName;
+    const groupPoints=shared.groups?.[myGroupName]?.points||0;
+    if(!myGroupName){t2("조 정보 없음");return;}
+    if(groupPoints<pointCost){t2("조 포인트 부족");return;}
+    setShared(s=>({
+      ...s,
+      groups:{
+        ...(s.groups||{}),
+        [myGroupName]:{
+          ...(s.groups?.[myGroupName]||{}),
+          points:(s.groups?.[myGroupName]?.points||0)-pointCost,
+        },
+      },
+      teams:{
+        ...s.teams,
+        [teamId]:{
+          ...s.teams[teamId],
+          purchases:[...(Array.isArray(s.teams[teamId]?.purchases)?s.teams[teamId].purchases:[]),latest.id],
+        },
+      },
+    }));
     t2(`${latest.name} 구매 완료! (-${pointCost}P)`);
   };
 
@@ -2963,48 +3133,75 @@ function UserApp(){
 
   /* ── 종료 ── */
   if(screen==="ended"){
-    const fd=totalAsset()-initCash;
-    const rank=Object.entries(shared.teams||{}).map(([id,tm])=>{
-      const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
-        const st=shared.stocks?.find(x=>x.id===sid);
-        return acc+(st?st.prices[st.prices.length-1]*h.qty:0);
+    const myGroupName=shared.teamCredentials?.[teamName]?.groupName;
+    const groupRank=Array.from({length:16},(_,i)=>`${i+1}조`).map(group=>{
+      const members=Object.entries(shared.teamCredentials||{})
+        .filter(([,v])=>v.groupName===group);
+      const total=members.reduce((sum,[,{id}])=>{
+        const tm=shared.teams?.[id];
+        if(!tm) return sum;
+        const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
+          if(sid==='_empty') return acc;
+          const st=shared.stocks?.find(x=>x.id===sid);
+          return acc+(st?st.prices[st.prices.length-1]*(h.qty||0):0);
+        },0);
+        return sum+(tm.cash||0)+sv;
       },0);
-      return{id,name:tm.name,total:tm.cash+sv};
-    }).sort((a,b)=>b.total-a.total);
-    const myRank=rank.findIndex(r=>r.id===teamId)+1;
+      const groupPoints=shared.groups?.[group]?.points||0;
+      return{group,total,memberCount:members.length,groupPoints};
+    }).filter(g=>g.memberCount>0).sort((a,b)=>b.total-a.total);
+    const myGroupRank=groupRank.findIndex(g=>g.group===myGroupName)+1;
+    const myGroupData=groupRank.find(g=>g.group===myGroupName);
+    const myGroupFd=(myGroupData?.total||0)-(initCash*(myGroupData?.memberCount||1));
     return(
       <div style={W.wrap}>
         <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:G.white}}>
           <div style={{background:`linear-gradient(135deg,${G.blue},${G.purple})`,padding:"40px 24px 32px",textAlign:"center"}}>
-            <div style={{fontSize:48,marginBottom:12}}>{fd>=0?"🏆":"📉"}</div>
+            <div style={{fontSize:48,marginBottom:12}}>{myGroupFd>=0?"🏆":"📉"}</div>
             <div style={{fontSize:22,fontWeight:800,color:G.white,marginBottom:4}}>게임 종료!</div>
-            <div style={{fontSize:14,color:"rgba(255,255,255,0.8)",marginBottom:20}}>{teamName}팀 최종 결과</div>
+            <div style={{fontSize:14,color:"rgba(255,255,255,0.8)",marginBottom:20}}>{myGroupName||teamName} 최종 결과</div>
             <div style={{background:"rgba(255,255,255,0.15)",borderRadius:16,padding:"16px 20px",display:"inline-block",minWidth:200}}>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:4}}>최종 총 자산</div>
-              <div style={{fontSize:28,fontWeight:800,color:G.white,marginBottom:4}}>{fmt(totalAsset())}</div>
-              <div style={{fontSize:15,fontWeight:600,color:fd>=0?"#FFD700":"#FF8080"}}>{fd>=0?"+":""}{fmt(fd)} ({fd>=0?"+":""}{((fd/initCash)*100).toFixed(2)}%)</div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:4}}>조 합산 총 자산</div>
+              <div style={{fontSize:28,fontWeight:800,color:G.white,marginBottom:4}}>{fmt(myGroupData?.total||0)}</div>
+              <div style={{fontSize:15,fontWeight:600,color:myGroupFd>=0?"#FFD700":"#FF8080"}}>
+                {myGroupFd>=0?"+":""}{fmt(myGroupFd)}
+              </div>
             </div>
-            {myRank>0&&<div style={{marginTop:12,fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:600}}>
-              {rank.length}팀 중 {myRank}위 {myRank===1?"🥇":myRank===2?"🥈":myRank===3?"🥉":""}
+            {myGroupRank>0&&<div style={{marginTop:12,fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:600}}>
+              {groupRank.length}개 조 중 {myGroupRank}위 {myGroupRank===1?"🥇":myGroupRank===2?"🥈":myGroupRank===3?"🥉":""}
+              {(myGroupData?.groupPoints||0)>0&&<span style={{marginLeft:8}}>💎 {myGroupData.groupPoints}P</span>}
             </div>}
           </div>
           <div style={{padding:"16px"}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>전체 순위</div>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>조별 최종 순위</div>
             <div style={{background:G.white,borderRadius:14,border:`1px solid ${G.border}`,overflow:"hidden",marginBottom:12}}>
-              {rank.map((t,i)=>(
-                <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
-                  borderBottom:i<rank.length-1?`1px solid ${G.border}`:"none",
-                  background:t.id===teamId?G.blueLight:"transparent"}}>
-                  <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,
-                    background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":G.gray4,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:12,fontWeight:700,color:i<3?G.white:G.gray1}}>{i+1}</div>
-                  <div style={{flex:1,fontSize:13,fontWeight:t.id===teamId?700:500,color:G.black}}>
-                    {t.name}{t.id===teamId?" (나)":""}
+              {groupRank.map((g,i)=>{
+                const initTotal=initCash*g.memberCount;
+                const diff=g.total-initTotal;
+                return(
+                  <div key={g.group} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
+                    borderBottom:i<groupRank.length-1?`1px solid ${G.border}`:"none",
+                    background:g.group===myGroupName?G.blueLight:"transparent"}}>
+                    <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,
+                      background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":G.gray4,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:12,fontWeight:700,color:i<3?G.white:G.gray1}}>{i+1}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:g.group===myGroupName?800:500,color:G.black}}>
+                        {g.group}{g.group===myGroupName?" (우리 조)":""}
+                      </div>
+                      <div style={{fontSize:11,color:G.gray1}}>
+                        {g.memberCount}명
+                        {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:4}}>💎 {g.groupPoints}P</span>}
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:G.black}}>{fmt(g.total)}</div>
+                      <div style={{fontSize:11,color:diff>=0?G.red:G.blue}}>{diff>=0?"+":""}{fmt(diff)}</div>
+                    </div>
                   </div>
-                  <div style={{fontSize:13,fontWeight:700,color:G.black}}>{fmt(t.total)}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {(shared.phase==="ready"||shared.phase==="round")&&(
               <Btn onClick={()=>setScreen("main")} style={{width:"100%",padding:"14px",fontSize:15,borderRadius:12}}>계속하기 →</Btn>
@@ -3225,9 +3422,13 @@ function UserApp(){
             <div style={{fontSize:13,fontWeight:600,color:diff>=0?G.red:G.blue,marginTop:1}}>
               {diff>=0?"▲ +":"▼ "}{fmt(Math.abs(diff))} ({diff>=0?"+":""}{diffPct}%)
             </div>
-            {(myTeam?.points||0)>0&&(
-              <div style={{fontSize:12,color:G.purple,fontWeight:600,marginTop:2}}>💎 {myTeam.points}P 보유</div>
-            )}
+            {(()=>{
+              const mgn=shared.teamCredentials?.[teamName]?.groupName;
+              const gp=shared.groups?.[mgn]?.points||0;
+              return gp>0&&mgn?(
+                <div style={{fontSize:12,color:G.purple,fontWeight:600,marginTop:2}}>💎 {gp}P ({mgn})</div>
+              ):null;
+            })()}
           </div>
           <div style={{textAlign:"right"}}>
             <div style={{background:shared.phase==="round"?G.greenLight:shared.phase==="break"?G.yellowLight:G.gray4,
@@ -3441,10 +3642,13 @@ function UserApp(){
           }
         </>}
 
-        {tab==="shop"&&<>
+        {tab==="shop"&&(()=>{
+          const _mgn=shared.teamCredentials?.[teamName]?.groupName;
+          const _gp=shared.groups?.[_mgn]?.points||0;
+          return(<>
           <div style={{padding:"10px 18px 5px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontSize:12,color:G.gray1,fontWeight:500}}>포인트 상점</div>
-            <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {myTeam?.points||0}P</div>
+            <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {_gp}P {_mgn?`(${_mgn})`:""}</div>
           </div>
           <div style={{padding:"0 14px 8px"}}>
             <div style={{background:G.purpleLight,borderRadius:11,padding:"11px 13px",fontSize:13,color:G.purple,fontWeight:500,lineHeight:1.5}}>
@@ -3453,9 +3657,8 @@ function UserApp(){
           </div>
           {(shared.shopItems||[]).map(item=>{
             const bought=purchases.includes(item.id);
-            const pointCost=item.pointPrice||Math.round((item.price||0)/10000);
-            const myPoints=myTeam?.points||0;
-            const canAfford=myPoints>=pointCost;
+            const pointCost=item.pointPrice||50;
+            const canAfford=_gp>=pointCost;
             return(
               <div key={item.id} style={{background:G.white,marginBottom:1,padding:"15px 18px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
@@ -3485,7 +3688,8 @@ function UserApp(){
               </div>
             );
           })}
-        </>}
+        </>);
+        })()}
       </div>
       {/* ── 채팅 플로팅 버튼 ── */}
       {screen === "main" && (
