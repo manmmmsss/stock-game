@@ -33,6 +33,8 @@ const WRAP = {
 };
 
 const GAME_REF = ref(db, "game");
+const TEAM_REF = (tid) => ref(db, `game/teams/${tid}`);
+const GROUP_REF = (gname) => ref(db, `game/groups/${gname}`);
 
 function removeUndefined(obj) {
   if (obj === null || obj === undefined) return null;
@@ -2860,27 +2862,29 @@ function UserApp(){
     setTeamId(cred.id);setTeamName(name);setLoginErr("");setScreen("main");
   };
 
-  const updTeam = async (fn) => setShared(s => {
-    const rawTeam = s.teams?.[teamId];
-    const cur = {
-      name: teamName,
-      cash: s.initCash || DEFAULT_INIT_CASH,
-      holdings: {},
-      purchases: [],
-      history: [],
-      borrowed: 0,
-      ...(rawTeam || {}),
-      // 배열 보장
-      history: Array.isArray(rawTeam?.history)
-        ? rawTeam.history
-        : Object.values(rawTeam?.history || {}),
-      purchases: Array.isArray(rawTeam?.purchases)
-        ? rawTeam.purchases
-        : Object.values(rawTeam?.purchases || []),
-    };
-    const updated = fn(cur);
-    return { ...s, teams: { ...s.teams, [teamId]: updated } };
-  });
+  const updTeam = async (fn) => {
+    try {
+      const snap = await get(TEAM_REF(teamId));
+      const cur = snap.val() || {
+        name: teamName,
+        cash: shared.initCash || DEFAULT_INIT_CASH,
+        holdings: {}, purchases: [], history: [], borrowed: 0, points: 0,
+      };
+      if (cur.history && !Array.isArray(cur.history)) {
+        cur.history = Object.values(cur.history).filter(x => x !== "_empty" && typeof x === 'object');
+      }
+      if (!cur.history) cur.history = [];
+      if (cur.purchases && !Array.isArray(cur.purchases)) {
+        cur.purchases = Object.values(cur.purchases).filter(x => x !== "_empty");
+      }
+      if (!cur.purchases) cur.purchases = [];
+      if (cur.holdings?._empty) cur.holdings = {};
+      const updated = fn(cur);
+      await fbSet(TEAM_REF(teamId), removeUndefined(updated));
+    } catch(e) {
+      console.error("updTeam error:", e);
+    }
+  };
 
   const orderPrice=detail?(isBlind?detail.prices[Math.min(round-1,detail.prices.length-1)]:getLivePrice(detail)):0;
   const effectiveQty=qty*leverage;
@@ -3009,26 +3013,12 @@ function UserApp(){
     if(purchases.includes(latest.id)){t2("이미 구매한 항목");return;}
     const pointCost=latest.pointPrice||50;
     const myGroupName=shared.teamCredentials?.[teamName]?.groupName;
-    const groupPoints=shared.groups?.[myGroupName]?.points||0;
     if(!myGroupName){t2("조 정보 없음");return;}
-    if(groupPoints<pointCost){t2("조 포인트 부족");return;}
-    setShared(s=>({
-      ...s,
-      groups:{
-        ...(s.groups||{}),
-        [myGroupName]:{
-          ...(s.groups?.[myGroupName]||{}),
-          points:(s.groups?.[myGroupName]?.points||0)-pointCost,
-        },
-      },
-      teams:{
-        ...s.teams,
-        [teamId]:{
-          ...s.teams[teamId],
-          purchases:[...(Array.isArray(s.teams[teamId]?.purchases)?s.teams[teamId].purchases:[]),latest.id],
-        },
-      },
-    }));
+    const groupSnap=await get(GROUP_REF(myGroupName));
+    const groupData=groupSnap.val()||{points:0};
+    if((groupData.points||0)<pointCost){t2("조 포인트 부족");return;}
+    await updTeam(t=>({...t,purchases:[...(t.purchases||[]),latest.id]}));
+    await fbSet(GROUP_REF(myGroupName),{...groupData,points:(groupData.points||0)-pointCost});
     t2(`${latest.name} 구매 완료! (-${pointCost}P)`);
   };
 
