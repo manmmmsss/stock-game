@@ -2934,12 +2934,12 @@ function UserApp(){
       const h=holdings[s.id];
       if(!h||h.qty<effectiveQty){t2("보유 수량 부족");setConfirm(false);return;}
       const proceeds=cost-feeAmt;
-      const repay=Math.min(borrowed,cost*((leverage-1)/leverage)||0);
       await updTeam(t=>{
+        const repay=Math.min(t.borrowed||0,cost*((leverage-1)/leverage)||0);
         const newQty=(t.holdings?.[s.id]?.qty||0)-effectiveQty;
         const rec={time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
           type:'sell',stockName:s.name,stockEmoji:s.emoji,qty:effectiveQty,price:cur,total:cost};
-        return{...t,cash:t.cash+proceeds,borrowed:Math.max(0,(t.borrowed||0)-repay),
+        return{...t,cash:t.cash+proceeds-repay,borrowed:Math.max(0,(t.borrowed||0)-repay),
           holdings:{...t.holdings,[s.id]:{...t.holdings?.[s.id],qty:newQty}},
           history:[...(t.history||[]),rec]};
       });
