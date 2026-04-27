@@ -2718,19 +2718,23 @@ function UserApp(){
   const [tradePrice, setTradePrice] = useState(0);
   const [tradeTo, setTradeTo] = useState("전체공개");
 
+  const SESSION_TTL = 10 * 60 * 1000; // 10분
+
   useEffect(() => {
     if (screen !== "login") return;
     if (!shared.teams || Object.keys(shared.teams).length === 0) return;
     try {
-      const saved = sessionStorage.getItem('sg_session');
+      const saved = localStorage.getItem('sg_session');
       if (saved) {
-        const { id, name } = JSON.parse(saved);
-        if (id && name && shared.teams[id]) {
+        const { id, name, ts } = JSON.parse(saved);
+        if (id && name && shared.teams[id] && Date.now() - ts < SESSION_TTL) {
+          // 복원 시 타임스탬프 갱신 (활동 중이면 10분 연장)
+          localStorage.setItem('sg_session', JSON.stringify({ id, name, ts: Date.now() }));
           setTeamId(id);
           setTeamName(name);
           setScreen("main");
         } else {
-          sessionStorage.removeItem('sg_session');
+          localStorage.removeItem('sg_session');
         }
       }
     } catch(e) {}
@@ -2738,7 +2742,7 @@ function UserApp(){
 
   useEffect(() => {
     if (screen === "ended") {
-      try { sessionStorage.removeItem('sg_session'); } catch(e) {}
+      try { localStorage.removeItem('sg_session'); } catch(e) {}
     }
   }, [screen]);
 
@@ -2857,7 +2861,7 @@ function UserApp(){
     if(!cred){setLoginErr("등록되지 않은 팀 이름입니다");return;}
     if(cred.pw!==pw){setLoginErr("비밀번호가 올바르지 않습니다");return;}
     try {
-      sessionStorage.setItem('sg_session', JSON.stringify({ id: cred.id, name }));
+      localStorage.setItem('sg_session', JSON.stringify({ id: cred.id, name, ts: Date.now() }));
     } catch(e) {}
     setTeamId(cred.id);setTeamName(name);setLoginErr("");setScreen("main");
   };
