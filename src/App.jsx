@@ -735,6 +735,7 @@ const INIT_SS={
     { id:"result3",label:"최종 결과 확인",   type:"result",  duration:300, round:3 },
   ],
   resultHint: "",
+  rules: "",
 };
 
 const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, initCash = DEFAULT_INIT_CASH) => {
@@ -1593,6 +1594,18 @@ function BetResultPopup({ data, onClose }) {
 function AdminApp({onBack=null}){
   const shared=useShared();
   useAutoEventAndHistory(shared);
+  // 운영자 세션 갱신 (5분마다 타임스탬프 업데이트)
+  useEffect(()=>{
+    const refresh=()=>{
+      try{
+        const s=localStorage.getItem(ADMIN_SESSION_KEY);
+        if(s){const{ts}=JSON.parse(s);if(Date.now()-ts<ADMIN_SESSION_TTL)localStorage.setItem(ADMIN_SESSION_KEY,JSON.stringify({ts:Date.now()}));}
+      }catch(e){}
+    };
+    refresh();
+    const id=setInterval(refresh,5*60*1000);
+    return()=>clearInterval(id);
+  },[]);
   const [tab,setTab]=useState("control");
   const [settingsTab,setSettingsTab]=useState("template");
   const [toast,setToast]=useState({msg:"",show:false});
@@ -1632,6 +1645,7 @@ function AdminApp({onBack=null}){
   const [breakRem,setBreakRem]=useState(null);
   const [betRem,setBetRem]=useState(null);
   const [resultHintInput,setResultHintInput]=useState("");
+  const [rulesInput,setRulesInput]=useState("");
   const [previewTeamId,setPreviewTeamId]=useState(null);
 
   // shared → 로컬 설정 동기화
@@ -1644,7 +1658,8 @@ function AdminApp({onBack=null}){
     if(shared.minBet!==undefined) setMinBet(shared.minBet);
     if(shared.maxBetPct!==undefined) setMaxBetPct(shared.maxBetPct);
     if(shared.resultHint!==undefined) setResultHintInput(shared.resultHint);
-  },[shared.breakDuration,shared.betWindow,shared.betEnabled,shared.baseOdds,shared.dynamicOdds,shared.minBet,shared.maxBetPct,shared.resultHint]);
+    if(shared.rules!==undefined) setRulesInput(shared.rules||"");
+  },[shared.breakDuration,shared.betWindow,shared.betEnabled,shared.baseOdds,shared.dynamicOdds,shared.minBet,shared.maxBetPct,shared.resultHint,shared.rules]);
 
   // 휴식 타이머 (표시용)
   useEffect(()=>{
@@ -2514,6 +2529,22 @@ function AdminApp({onBack=null}){
                 t2("힌트 삭제됨");
               }} color={G.redLight} textColor={G.red}
                 style={{flex:1,padding:"9px",fontSize:12}}>삭제</Btn>
+            </div>
+          </div>
+
+          {/* 규칙 설정 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:4}}>📋 게임 규칙</div>
+            <div style={{fontSize:11,color:G.gray1,marginBottom:8}}>참여자 화면의 규칙 탭에 표시됩니다</div>
+            <textarea value={rulesInput} onChange={e=>setRulesInput(e.target.value)}
+              placeholder={"예) 1. 매수·매도는 라운드 진행 중에만 가능합니다\n2. 수수료율 10%\n3. 레버리지 최대 2배"}
+              rows={5}
+              style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,
+                padding:"9px 10px",fontSize:13,fontFamily:"inherit",outline:"none",
+                color:G.black,boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}/>
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <Btn onClick={()=>{setShared(s=>({...s,rules:rulesInput}));t2("규칙 저장됨");}} style={{flex:1,padding:"9px",fontSize:12}}>저장</Btn>
+              <Btn onClick={()=>{setShared(s=>({...s,rules:""}));setRulesInput("");t2("규칙 삭제됨");}} color={G.redLight} textColor={G.red} style={{flex:1,padding:"9px",fontSize:12}}>삭제</Btn>
             </div>
           </div>
 
@@ -4416,9 +4447,9 @@ function UserApp({previewAs=null,onBack=null}){
             )}
           </div>
         </div>
-        <div style={{display:"flex"}}>
-          {[["market","시장"],["portfolio","보유"],["shop","상점 🛒"]].map(([key,label])=>(
-            <div key={key} onClick={()=>setTab(key)} style={{flex:1,textAlign:"center",padding:"8px 0",fontSize:12,fontWeight:600,
+        <div style={{display:"flex",margin:"0 -18px"}}>
+          {[["market","시장"],["portfolio","보유"],["shop","상점"],["rules","규칙"]].map(([key,label])=>(
+            <div key={key} onClick={()=>setTab(key)} style={{flex:1,textAlign:"center",padding:"9px 0",fontSize:12,fontWeight:600,
               color:tab===key?G.blue:G.gray1,borderBottom:`2px solid ${tab===key?G.blue:"transparent"}`,cursor:"pointer",transition:"all .15s"}}>{label}</div>
           ))}
         </div>
@@ -4643,6 +4674,18 @@ function UserApp({previewAs=null,onBack=null}){
             })
           }
         </>}
+
+        {tab==="rules"&&(
+          <div style={{padding:"16px 18px"}}>
+            <div style={{background:G.white,borderRadius:14,padding:"16px"}}>
+              <div style={{fontSize:15,fontWeight:800,color:G.black,marginBottom:12}}>📋 게임 규칙</div>
+              {shared.rules
+                ?<div style={{fontSize:14,color:G.black,lineHeight:1.9,whiteSpace:"pre-wrap"}}>{shared.rules}</div>
+                :<div style={{textAlign:"center",color:G.gray2,padding:"32px 0",fontSize:13}}>아직 등록된 규칙이 없습니다</div>
+              }
+            </div>
+          </div>
+        )}
 
         {tab==="shop"&&(()=>{
           const _mgn=shared.teamCredentials?.[teamName]?.groupName;
@@ -5011,6 +5054,11 @@ export default function App(){
     return false;
   });
 
+  useEffect(()=>{
+    if(mode==="admin"&&!auth){
+      try{const s=localStorage.getItem(ADMIN_SESSION_KEY);if(s){const{ts}=JSON.parse(s);if(Date.now()-ts<ADMIN_SESSION_TTL)setAuth(true);}}catch(e){}
+    }
+  },[mode]);
   const handleAdminLogin=()=>{
     try{localStorage.setItem(ADMIN_SESSION_KEY,JSON.stringify({ts:Date.now()}));}catch(e){}
     setAuth(true);
