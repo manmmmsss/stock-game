@@ -3554,6 +3554,46 @@ function UserApp(){
   const stockVal=total-cash;
   const W={wrap:{...WRAP,background:G.bg}};
 
+  // 타임라인 현재 단계 — 모든 화면에서 공유
+  const _tlSteps = shared.timelineSteps || INIT_SS.timelineSteps;
+  const curStep = _tlSteps[shared.timelineIndex ?? -1];
+  const stepRem = shared.timelineEndsAt
+    ? Math.max(0, Math.round((shared.timelineEndsAt - Date.now()) / 1000))
+    : null;
+  const isBettingPhase =
+    shared.currentPhaseDetail === "betting"
+    && !!shared.betDeadline
+    && shared.betDeadline > Date.now()
+    && shared.betEnabled;
+
+  // 모든 화면 우상단에 표시되는 플로팅 타이머
+  const PhaseChip = curStep ? (
+    <div style={{
+      position:"fixed", top:"env(safe-area-inset-top, 10px)", right:12,
+      zIndex:9999, display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, pointerEvents:"none",
+    }}>
+      <div style={{
+        background:
+          shared.phase==="round"?G.green:
+          shared.currentPhaseDetail==="betting"?G.purple:
+          shared.currentPhaseDetail==="result"?G.yellow:G.gray2,
+        color:G.white, borderRadius:20, padding:"3px 10px",
+        fontSize:11, fontWeight:700, boxShadow:"0 2px 8px rgba(0,0,0,0.18)",
+      }}>
+        {curStep.label}
+      </div>
+      {stepRem !== null && (
+        <div style={{
+          background:"rgba(0,0,0,0.72)", color:stepRem<=30?G.red:stepRem<=60?"#FFAA00":G.white,
+          borderRadius:14, padding:"2px 10px", fontSize:13, fontWeight:800,
+          fontFamily:"monospace", boxShadow:"0 2px 8px rgba(0,0,0,0.22)",
+        }}>
+          ⏱ {secToStr(stepRem)}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   /* ── 로그인 ── */
   if(screen==="login") return(
     <div style={W.wrap}>
@@ -3660,6 +3700,7 @@ function UserApp(){
           </div>
         </div>
       </div>
+      {PhaseChip}
     );
   }
 
@@ -3711,18 +3752,24 @@ function UserApp(){
                 </div>
               )}
             </div>
-            {/* 오른쪽: 라운드 정보 + 타이머 */}
+            {/* 오른쪽: 현재 단계 + 타이머 */}
             <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{background:shared.phase==="round"?G.greenLight:G.gray4,
-                color:shared.phase==="round"?G.green:G.gray1,
+              <div style={{background:
+                shared.phase==="round"?G.greenLight:
+                shared.currentPhaseDetail==="betting"?G.purpleLight:
+                shared.currentPhaseDetail==="result"?G.yellowLight:G.gray4,
+                color:
+                shared.phase==="round"?G.green:
+                shared.currentPhaseDetail==="betting"?G.purple:
+                shared.currentPhaseDetail==="result"?G.yellow:G.gray1,
                 borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,marginBottom:4,display:"inline-block"}}>
-                {shared.phase==="round"?`Round ${shared.round}`:shared.phase==="break"?`R${shared.round} 종료`:"대기중"}
+                {curStep ? curStep.label : "대기중"}
               </div>
-              {shared.phase==="round"&&rem!==null&&(
+              {stepRem !== null && (
                 <div style={{fontSize:18,fontWeight:800,
-                  color:rem<=30?G.red:rem<=60?G.orange:G.black,
+                  color:stepRem<=30?G.red:stepRem<=60?G.orange:G.black,
                   fontFamily:"monospace",display:"block"}}>
-                  ⏱ {secToStr(rem)}
+                  ⏱ {secToStr(stepRem)}
                 </div>
               )}
             </div>
@@ -3856,16 +3903,6 @@ function UserApp(){
   }
 
   /* ── 메인 ── */
-  const steps = shared.timelineSteps || INIT_SS.timelineSteps;
-  const curStep = steps[shared.timelineIndex ?? -1];
-  const stepRem = shared.timelineEndsAt
-    ? Math.max(0, Math.round((shared.timelineEndsAt - Date.now()) / 1000))
-    : null;
-  const isBettingPhase =
-    shared.currentPhaseDetail === "betting"
-    && !!shared.betDeadline
-    && shared.betDeadline > Date.now()
-    && shared.betEnabled;
   return(
     <div style={W.wrap}>
       <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
