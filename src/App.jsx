@@ -4055,62 +4055,64 @@ function UserApp(){
     const myGroupData=groupRank.find(g=>g.group===myGroupName);
     const myGroupFd=(myGroupData?.total||0)-(initCash*(myGroupData?.memberCount||1));
     return(
-      <div style={W.wrap}>
-        <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:G.white}}>
-          <div style={{background:`linear-gradient(135deg,${G.blue},${G.purple})`,padding:"40px 24px 32px",textAlign:"center"}}>
-            <div style={{fontSize:48,marginBottom:12}}>{myGroupFd>=0?"🏆":"📉"}</div>
-            <div style={{fontSize:22,fontWeight:800,color:G.white,marginBottom:4}}>게임 종료!</div>
-            <div style={{fontSize:14,color:"rgba(255,255,255,0.8)",marginBottom:20}}>{myGroupName||teamName} 최종 결과</div>
-            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:16,padding:"16px 20px",display:"inline-block",minWidth:200}}>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:4}}>조 합산 총 자산</div>
-              <div style={{fontSize:28,fontWeight:800,color:G.white,marginBottom:4}}>{fmt(myGroupData?.total||0)}</div>
-              <div style={{fontSize:15,fontWeight:600,color:myGroupFd>=0?"#FFD700":"#FF8080"}}>
-                {myGroupFd>=0?"+":""}{fmt(myGroupFd)}
+      <>
+        <div style={W.wrap}>
+          <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:G.white}}>
+            <div style={{background:`linear-gradient(135deg,${G.blue},${G.purple})`,padding:"40px 24px 32px",textAlign:"center"}}>
+              <div style={{fontSize:48,marginBottom:12}}>{myGroupFd>=0?"🏆":"📉"}</div>
+              <div style={{fontSize:22,fontWeight:800,color:G.white,marginBottom:4}}>게임 종료!</div>
+              <div style={{fontSize:14,color:"rgba(255,255,255,0.8)",marginBottom:20}}>{myGroupName||teamName} 최종 결과</div>
+              <div style={{background:"rgba(255,255,255,0.15)",borderRadius:16,padding:"16px 20px",display:"inline-block",minWidth:200}}>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:4}}>조 합산 총 자산</div>
+                <div style={{fontSize:28,fontWeight:800,color:G.white,marginBottom:4}}>{fmt(myGroupData?.total||0)}</div>
+                <div style={{fontSize:15,fontWeight:600,color:myGroupFd>=0?"#FFD700":"#FF8080"}}>
+                  {myGroupFd>=0?"+":""}{fmt(myGroupFd)}
+                </div>
               </div>
+              {myGroupRank>0&&<div style={{marginTop:12,fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:600}}>
+                {groupRank.length}개 조 중 {myGroupRank}위 {myGroupRank===1?"🥇":myGroupRank===2?"🥈":myGroupRank===3?"🥉":""}
+                {(myGroupData?.groupPoints||0)>0&&<span style={{marginLeft:8}}>💎 {myGroupData.groupPoints}</span>}
+              </div>}
             </div>
-            {myGroupRank>0&&<div style={{marginTop:12,fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:600}}>
-              {groupRank.length}개 조 중 {myGroupRank}위 {myGroupRank===1?"🥇":myGroupRank===2?"🥈":myGroupRank===3?"🥉":""}
-              {(myGroupData?.groupPoints||0)>0&&<span style={{marginLeft:8}}>💎 {myGroupData.groupPoints}</span>}
-            </div>}
-          </div>
-          <div style={{padding:"16px"}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>조별 최종 순위</div>
-            <div style={{background:G.white,borderRadius:14,border:`1px solid ${G.border}`,overflow:"hidden",marginBottom:12}}>
-              {groupRank.map((g,i)=>{
-                const initTotal=initCash*g.memberCount;
-                const diff=g.total-initTotal;
-                return(
-                  <div key={g.group} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
-                    borderBottom:i<groupRank.length-1?`1px solid ${G.border}`:"none",
-                    background:g.group===myGroupName?G.blueLight:"transparent"}}>
-                    <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,
-                      background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":G.gray4,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:12,fontWeight:700,color:i<3?G.white:G.gray1}}>{i+1}</div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:g.group===myGroupName?800:500,color:G.black}}>
-                        {g.group}{g.group===myGroupName?" (우리 조)":""}
+            <div style={{padding:"16px"}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>조별 최종 순위</div>
+              <div style={{background:G.white,borderRadius:14,border:`1px solid ${G.border}`,overflow:"hidden",marginBottom:12}}>
+                {groupRank.map((g,i)=>{
+                  const initTotal=initCash*g.memberCount;
+                  const diff=g.total-initTotal;
+                  return(
+                    <div key={g.group} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
+                      borderBottom:i<groupRank.length-1?`1px solid ${G.border}`:"none",
+                      background:g.group===myGroupName?G.blueLight:"transparent"}}>
+                      <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,
+                        background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":G.gray4,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:12,fontWeight:700,color:i<3?G.white:G.gray1}}>{i+1}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:g.group===myGroupName?800:500,color:G.black}}>
+                          {g.group}{g.group===myGroupName?" (우리 조)":""}
+                        </div>
+                        <div style={{fontSize:11,color:G.gray1}}>
+                          {g.memberCount}명
+                          {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:4}}>💎 {g.groupPoints}</span>}
+                        </div>
                       </div>
-                      <div style={{fontSize:11,color:G.gray1}}>
-                        {g.memberCount}명
-                        {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:4}}>💎 {g.groupPoints}</span>}
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:G.black}}>{fmt(g.total)}</div>
+                        <div style={{fontSize:11,color:diff>=0?G.red:G.blue}}>{diff>=0?"+":""}{fmt(diff)}</div>
                       </div>
                     </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:13,fontWeight:700,color:G.black}}>{fmt(g.total)}</div>
-                      <div style={{fontSize:11,color:diff>=0?G.red:G.blue}}>{diff>=0?"+":""}{fmt(diff)}</div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {(shared.phase==="ready"||shared.phase==="round")&&(
+                <Btn onClick={()=>setScreen("main")} style={{width:"100%",padding:"14px",fontSize:15,borderRadius:12}}>계속하기 →</Btn>
+              )}
             </div>
-            {(shared.phase==="ready"||shared.phase==="round")&&(
-              <Btn onClick={()=>setScreen("main")} style={{width:"100%",padding:"14px",fontSize:15,borderRadius:12}}>계속하기 →</Btn>
-            )}
           </div>
         </div>
-      </div>
-      {PhaseChip}
+        {PhaseChip}
+      </>
     );
   }
 
