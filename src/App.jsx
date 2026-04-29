@@ -98,6 +98,10 @@ const setShared = async (fn, opts = {}) => {
               : (current.teams[tid]?.purchases || []),
           };
         }
+        // next.teams에 없는 팀은 삭제 (delMember 등 명시적 삭제 반영)
+        for (const tid of Object.keys(current.teams)) {
+          if (!(tid in next.teams)) delete merged.teams[tid];
+        }
       }
 
       // chatMessages 배열 보존
