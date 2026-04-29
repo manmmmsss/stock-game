@@ -156,7 +156,7 @@ const useShared = () => {
             if (!tm.purchases) val.teams[tid].purchases = [];
             if (!tm.holdings) val.teams[tid].holdings = {};
             if (tm.borrowed === undefined) val.teams[tid].borrowed = 0;
-            if (tm.points === undefined) val.teams[tid].points = 0;
+            if (tm.diamonds === undefined) val.teams[tid].diamonds = 0;
           }
         }
         // _empty 플래그 제거
@@ -203,7 +203,7 @@ const useShared = () => {
               val.groups[gname].memberIds = Object.values(g.memberIds);
             }
             if (!g.memberIds) val.groups[gname].memberIds = [];
-            if (g.points === undefined) val.groups[gname].points = 0;
+            if (g.diamonds === undefined) val.groups[gname].diamonds = 0;
           }
         }
         if (val.bonusPool?._empty) val.bonusPool = {};
@@ -415,6 +415,194 @@ const BUILT_IN_TEMPLATES = [
       {id:"e5",name:"서킷브레이커",emoji:"🛑",desc:"급등으로 거래 일시 정지",globalEffect:-5,stockEffects:{s5:-20,s2:-15,s1:-8,s3:-5,s4:-10},note:"전체 조정",autoTrigger:false,triggerIntervalMin:2,triggerIntervalMax:4,probability:25,duration:0,affectTarget:true},
     ],
   },
+  {
+    id:"tpl6", name:"🎓 로(路) 공식전 (43분)", builtIn:true,
+    desc:"개인 100만원 시작, 3라운드, 베팅+힌트 포함 공식 세팅",
+    initCash:1000000, maxRound:3, feeRate:0.1,
+    leverageEnabled:false, leverageMax:2,
+    betEnabled:true, betBaseOdds:1.8, betDynamic:true,
+    betMinAmount:10, betMaxRatio:100, betDuration:180,
+    timelineSteps:[
+      {id:"bet1",  label:"1라운드 베팅",     type:"betting",duration:180,round:1},
+      {id:"round1",label:"1라운드 매매",     type:"round",  duration:600,round:1},
+      {id:"result1",label:"1라운드 종가",    type:"result", duration:60, round:1},
+      {id:"bet2",  label:"2라운드 베팅",     type:"betting",duration:180,round:2},
+      {id:"round2",label:"2라운드 매매",     type:"round",  duration:600,round:2},
+      {id:"result2",label:"2라운드 종가",    type:"result", duration:60, round:2},
+      {id:"round3",label:"3라운드 매매",     type:"round",  duration:600,round:3},
+      {id:"result3",label:"최종 결과",       type:"result", duration:300,round:3},
+    ],
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:10,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:10,blind:false,dividends:{}},
+      {id:"r3",label:"Round 3",durationMin:10,blind:false,dividends:{}},
+    ],
+    stocks:[
+      {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[50000,58000,52000],totalSupply:0,listed:true},
+      {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,40000,48000],totalSupply:0,listed:true},
+      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,195000,185000],totalSupply:0,listed:true},
+      {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,105000,98000],totalSupply:0,listed:true},
+      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,400000,440000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"1라운드 목표가 힌트",desc:"1라운드 특정 종목 목표가 공개",pointPrice:50,emoji:"🔮",hint:"운영자가 설정합니다"},
+      {id:"sh2",name:"시장 방향 리포트",desc:"전체 시장 흐름 분석",pointPrice:30,emoji:"📊",hint:"운영자가 설정합니다"},
+      {id:"sh3",name:"VIP 내부자 정보",desc:"특정 종목 다음 라운드 방향",pointPrice:80,emoji:"🕵️",hint:"운영자가 설정합니다"},
+    ],
+  },
+  {
+    id:"tpl7", name:"⚡ 단기 집중전 (25분)", builtIn:true,
+    desc:"2라운드 압축 버전, 빠른 의사결정 훈련",
+    initCash:1000000, maxRound:2, feeRate:0.2,
+    leverageEnabled:false, leverageMax:2,
+    betEnabled:true, betBaseOdds:2.0, betDynamic:false,
+    betMinAmount:10, betMaxRatio:100, betDuration:120,
+    timelineSteps:[
+      {id:"bet1",  label:"1라운드 베팅",  type:"betting",duration:120,round:1},
+      {id:"round1",label:"1라운드 매매",  type:"round",  duration:480,round:1},
+      {id:"result1",label:"1라운드 종가", type:"result", duration:60, round:1},
+      {id:"bet2",  label:"2라운드 베팅",  type:"betting",duration:120,round:2},
+      {id:"round2",label:"2라운드 매매",  type:"round",  duration:480,round:2},
+      {id:"result2",label:"최종 결과",    type:"result", duration:240,round:2},
+    ],
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:8,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:8,blind:false,dividends:{}},
+    ],
+    stocks:[
+      {id:"s1",name:"A기업",code:"A001",emoji:"🔴",prices:[100000,130000],totalSupply:0,listed:true},
+      {id:"s2",name:"B기업",code:"B001",emoji:"🔵",prices:[100000,80000],totalSupply:0,listed:true},
+      {id:"s3",name:"C기업",code:"C001",emoji:"🟢",prices:[100000,115000],totalSupply:0,listed:true},
+      {id:"s4",name:"D기업",code:"D001",emoji:"🟡",prices:[100000,95000],totalSupply:0,listed:true},
+      {id:"s5",name:"E기업",code:"E001",emoji:"⚫",prices:[100000,140000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"급등주 예고",desc:"2라운드 급등 예상 종목 공개",pointPrice:40,emoji:"🚀",hint:"운영자가 설정합니다"},
+      {id:"sh2",name:"급락주 경고",desc:"2라운드 급락 예상 종목 공개",pointPrice:40,emoji:"⚠️",hint:"운영자가 설정합니다"},
+    ],
+  },
+  {
+    id:"tpl8", name:"🎭 블라인드 심화전 (43분)", builtIn:true,
+    desc:"2라운드가 블라인드, 정보 비대칭 극대화",
+    initCash:1000000, maxRound:3, feeRate:0.1,
+    leverageEnabled:false, leverageMax:2,
+    betEnabled:true, betBaseOdds:2.5, betDynamic:true,
+    betMinAmount:10, betMaxRatio:100, betDuration:180,
+    timelineSteps:[
+      {id:"bet1",  label:"1라운드 베팅",     type:"betting",duration:180,round:1},
+      {id:"round1",label:"1라운드 매매",     type:"round",  duration:600,round:1},
+      {id:"result1",label:"1라운드 종가",    type:"result", duration:60, round:1},
+      {id:"bet2",  label:"2라운드 베팅",     type:"betting",duration:180,round:2},
+      {id:"round2",label:"2라운드 매매(🙈)", type:"round",  duration:600,round:2},
+      {id:"result2",label:"2라운드 종가",    type:"result", duration:60, round:2},
+      {id:"round3",label:"3라운드 매매",     type:"round",  duration:600,round:3},
+      {id:"result3",label:"최종 결과",       type:"result", duration:300,round:3},
+    ],
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:10,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:10,blind:true, dividends:{}},
+      {id:"r3",label:"Round 3",durationMin:10,blind:false,dividends:{}},
+    ],
+    stocks:[
+      {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[50000,62000,55000],totalSupply:0,listed:true},
+      {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,35000,50000],totalSupply:0,listed:true},
+      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,200000,175000],totalSupply:0,listed:true},
+      {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,110000,90000],totalSupply:0,listed:true},
+      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,380000,450000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"블라인드 해제 힌트",desc:"2라운드 블라인드 예상가 범위 공개",pointPrice:80,emoji:"🔓",hint:"운영자가 설정합니다"},
+      {id:"sh2",name:"방향 힌트",desc:"블라인드 라운드 종목별 방향만 공개",pointPrice:50,emoji:"🧭",hint:"운영자가 설정합니다"},
+      {id:"sh3",name:"3라운드 선행 정보",desc:"3라운드 주목 종목 공개",pointPrice:60,emoji:"🔭",hint:"운영자가 설정합니다"},
+    ],
+  },
+  {
+    id:"tpl9", name:"💸 배당 수익전 (43분)", builtIn:true,
+    desc:"라운드별 배당금이 핵심, 장기보유 전략 필수",
+    initCash:1000000, maxRound:3, feeRate:0.1,
+    leverageEnabled:false, leverageMax:2,
+    betEnabled:true, betBaseOdds:1.8, betDynamic:false,
+    betMinAmount:10, betMaxRatio:100, betDuration:180,
+    timelineSteps:[
+      {id:"bet1",  label:"1라운드 베팅",      type:"betting",duration:180,round:1},
+      {id:"round1",label:"1라운드 매매",      type:"round",  duration:600,round:1},
+      {id:"result1",label:"1라운드 종가+배당",type:"result", duration:60, round:1},
+      {id:"bet2",  label:"2라운드 베팅",      type:"betting",duration:180,round:2},
+      {id:"round2",label:"2라운드 매매",      type:"round",  duration:600,round:2},
+      {id:"result2",label:"2라운드 종가+배당",type:"result", duration:60, round:2},
+      {id:"round3",label:"3라운드 매매",      type:"round",  duration:600,round:3},
+      {id:"result3",label:"최종 결과+배당",   type:"result", duration:300,round:3},
+    ],
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:10,blind:false,dividends:{s1:500,s3:300}},
+      {id:"r2",label:"Round 2",durationMin:10,blind:false,dividends:{s2:800,s4:400}},
+      {id:"r3",label:"Round 3",durationMin:10,blind:false,dividends:{s1:1000,s3:800,s5:1500}},
+    ],
+    stocks:[
+      {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[50000,54000,58000],totalSupply:0,listed:true},
+      {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,47000,50000],totalSupply:0,listed:true},
+      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,184000,190000],totalSupply:0,listed:true},
+      {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,97000,100000],totalSupply:0,listed:true},
+      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,428000,440000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"배당 수익률 분석",desc:"전 종목 라운드별 배당 수익률 공개",pointPrice:30,emoji:"📊",hint:"운영자가 설정합니다"},
+      {id:"sh2",name:"3라운드 고배당 힌트",desc:"3라운드 배당이 가장 높은 종목 Top2",pointPrice:50,emoji:"💰",hint:"운영자가 설정합니다"},
+      {id:"sh3",name:"포트폴리오 추천",desc:"배당+시세차익 최적 포트폴리오",pointPrice:70,emoji:"👑",hint:"운영자가 설정합니다"},
+    ],
+  },
+  {
+    id:"tpl10", name:"🌪️ 이벤트 폭풍전 (43분)", builtIn:true,
+    desc:"자동 이벤트가 자주 발동, 빠른 대응이 핵심",
+    initCash:1000000, maxRound:3, feeRate:0.15,
+    leverageEnabled:true, leverageMax:2,
+    betEnabled:true, betBaseOdds:2.0, betDynamic:true,
+    betMinAmount:10, betMaxRatio:100, betDuration:180,
+    timelineSteps:[
+      {id:"bet1",  label:"1라운드 베팅",     type:"betting",duration:180,round:1},
+      {id:"round1",label:"1라운드 매매",     type:"round",  duration:600,round:1},
+      {id:"result1",label:"1라운드 종가",    type:"result", duration:60, round:1},
+      {id:"bet2",  label:"2라운드 베팅",     type:"betting",duration:180,round:2},
+      {id:"round2",label:"2라운드 매매",     type:"round",  duration:600,round:2},
+      {id:"result2",label:"2라운드 종가",    type:"result", duration:60, round:2},
+      {id:"round3",label:"3라운드 매매",     type:"round",  duration:600,round:3},
+      {id:"result3",label:"최종 결과",       type:"result", duration:300,round:3},
+    ],
+    rounds:[
+      {id:"r1",label:"Round 1",durationMin:10,blind:false,dividends:{}},
+      {id:"r2",label:"Round 2",durationMin:10,blind:false,dividends:{}},
+      {id:"r3",label:"Round 3",durationMin:10,blind:false,dividends:{}},
+    ],
+    stocks:[
+      {id:"s1",name:"삼성전자",code:"005930",emoji:"💎",prices:[50000,60000,45000],totalSupply:0,listed:true},
+      {id:"s2",name:"카카오",code:"035720",emoji:"🟡",prices:[45000,35000,55000],totalSupply:0,listed:true},
+      {id:"s3",name:"네이버",code:"035420",emoji:"🟢",prices:[180000,210000,170000],totalSupply:0,listed:true},
+      {id:"s4",name:"현대자동차",code:"005380",emoji:"🚗",prices:[95000,115000,80000],totalSupply:0,listed:true},
+      {id:"s5",name:"LG에너지솔루션",code:"373220",emoji:"⚡",prices:[420000,460000,390000],totalSupply:0,listed:true},
+    ],
+    shopItems:[
+      {id:"sh1",name:"이벤트 예고",desc:"다음 자동 이벤트 종류 미리 공개",pointPrice:60,emoji:"⚡",hint:"운영자가 설정합니다"},
+      {id:"sh2",name:"이벤트 방어막",desc:"다음 이벤트 피해 50% 감소 (효과형)",pointPrice:80,emoji:"🛡️",hint:"이 아이템을 구매하면 다음 이벤트 발동 시 피해가 50% 감소합니다"},
+      {id:"sh3",name:"이벤트 내부 정보",desc:"이벤트 발동 시 가장 크게 오를 종목",pointPrice:100,emoji:"💣",hint:"운영자가 설정합니다"},
+    ],
+    eventPresets:[
+      {id:"e1",name:"반도체 수출 급증",emoji:"💾",desc:"글로벌 반도체 수요 폭증",
+       globalEffect:8,stockEffects:{s1:25,s5:15,s2:-5,s3:5,s4:3},
+       autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:60,duration:90,affectTarget:true},
+      {id:"e2",name:"금리 인상 쇼크",emoji:"📉",desc:"기준금리 0.75% 긴급 인상",
+       globalEffect:-12,stockEffects:{s2:-20,s3:-15,s1:-8,s4:-5,s5:-10},
+       autoTrigger:true,triggerIntervalMin:1,triggerIntervalMax:2,probability:55,duration:120,affectTarget:true},
+      {id:"e3",name:"외국인 대규모 매수",emoji:"🌏",desc:"외국인 한국 주식 대량 매입",
+       globalEffect:10,stockEffects:{},
+       autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:3,probability:50,duration:60,affectTarget:true},
+      {id:"e4",name:"기업 스캔들",emoji:"💣",desc:"대기업 분식회계 발각",
+       globalEffect:-15,stockEffects:{s2:-35,s3:-25,s1:-10,s4:-8,s5:-5},
+       autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:3,probability:40,duration:0,affectTarget:true},
+      {id:"e5",name:"AI 혁명 발표",emoji:"🤖",desc:"초거대 AI 상용화 발표",
+       globalEffect:12,stockEffects:{s1:20,s3:25,s2:15,s5:10,s4:5},
+       autoTrigger:true,triggerIntervalMin:2,triggerIntervalMax:4,probability:45,duration:90,affectTarget:true},
+    ],
+  },
 ];
 
 const DEFAULT_EVENT_AUTO={autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:3,probability:50,duration:60,affectTarget:true};
@@ -428,7 +616,7 @@ const makeEventPresets=()=>[
 ];
 
 const ADMIN_PW="admin1234";
-const DEFAULT_INIT_CASH=10_000_000;
+const DEFAULT_INIT_CASH=1_000_000;
 
 /* ══════════════════════════════════════════
    공유 상태
@@ -476,8 +664,28 @@ const INIT_SS={
   bets: {},
   betOdds: {},
   eventSnapshots: {},
-  pointsEnabled: true,
+  diamondsEnabled: true,
   groups: {},
+  // 시드 보정
+  seedBalancing: true,
+  // 자동 타임라인
+  timelineAuto: false,
+  timelineIndex: -1,
+  timelineEndsAt: null,
+  currentPhase: "ready",
+  currentPhaseDetail: "",
+  // ready → betting → round → result → ended
+  timelineSteps: [
+    { id:"bet1",   label:"1라운드 베팅",     type:"betting", duration:180, round:1 },
+    { id:"round1", label:"1라운드 매매",     type:"round",   duration:600, round:1 },
+    { id:"result1",label:"1라운드 종가 확인",type:"result",  duration:60,  round:1 },
+    { id:"bet2",   label:"2라운드 베팅",     type:"betting", duration:180, round:2 },
+    { id:"round2", label:"2라운드 매매",     type:"round",   duration:600, round:2 },
+    { id:"result2",label:"2라운드 종가 확인",type:"result",  duration:60,  round:2 },
+    { id:"round3", label:"3라운드 매매",     type:"round",   duration:600, round:3 },
+    { id:"result3",label:"최종 결과 확인",   type:"result",  duration:300, round:3 },
+  ],
+  resultHint: "",
 };
 
 
@@ -1286,6 +1494,7 @@ function AdminApp(){
   const [maxBetPct,setMaxBetPct]=useState(50);
   const [breakRem,setBreakRem]=useState(null);
   const [betRem,setBetRem]=useState(null);
+  const [resultHintInput,setResultHintInput]=useState("");
 
   // shared → 로컬 설정 동기화
   useEffect(()=>{
@@ -1312,6 +1521,57 @@ function AdminApp(){
     const id=setInterval(tick,1000);
     return()=>clearInterval(id);
   },[shared.phase,shared.breakEndsAt,shared.betDeadline]);
+
+  // 자동 타임라인 진행
+  useEffect(() => {
+    if (!shared.timelineAuto) return;
+    if (shared.timelineEndsAt && Date.now() < shared.timelineEndsAt) return;
+    const steps = shared.timelineSteps || INIT_SS.timelineSteps;
+    const nextIdx = (shared.timelineIndex ?? -1) + 1;
+    if (nextIdx >= steps.length) {
+      setShared(s => ({ ...s, timelineAuto: false, phase: "ended" }));
+      return;
+    }
+    const step = steps[nextIdx];
+    const endsAt = Date.now() + step.duration * 1000;
+    const now = Date.now();
+    const updates = {
+      timelineIndex: nextIdx,
+      timelineEndsAt: endsAt,
+      currentPhaseDetail: step.type,
+    };
+    if (step.type === "betting") {
+      updates.betDeadline = endsAt;
+      updates.betOdds = {};
+    }
+    if (step.type === "round") {
+      updates.phase = "round";
+      updates.round = step.round;
+      updates.roundStartedAt = now;
+      updates.roundEndsAt = endsAt;
+      updates.betDeadline = 0;
+      updates.priceHistory = {};
+      updates.modifiedTargets = {};
+      updates.eventSnapshots = {};
+      const autoEvts = (shared.eventPresets || []).filter(e => e.autoTrigger);
+      if (autoEvts.length > 0) {
+        const ev = autoEvts[0];
+        const minMs = (ev.triggerIntervalMin || 1) * 60 * 1000;
+        const maxMs = (ev.triggerIntervalMax || 3) * 60 * 1000;
+        updates.nextAutoEventAt = now + minMs + Math.random() * (maxMs - minMs);
+      }
+    }
+    if (step.type === "result") {
+      updates.phase = "break";
+      updates.roundEndsAt = null;
+      updates.roundStartedAt = null;
+    }
+    if (step.type === "result" && nextIdx === steps.length - 1) {
+      updates.phase = "ended";
+    }
+    setShared(s => ({ ...s, ...updates }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared.timelineAuto, shared.timelineEndsAt, shared.timelineIndex]);
 
   // 자동 라운드 진행
   useEffect(()=>{
@@ -1340,6 +1600,12 @@ function AdminApp(){
     setFeeRate(tpl.feeRate ?? 0.1);
     setLeverageEnabled(tpl.leverageEnabled ?? false);
     setLeverageMax(tpl.leverageMax ?? 2);
+    setBetEnabled(tpl.betEnabled ?? false);
+    setBaseOdds(tpl.betBaseOdds ?? 1.8);
+    setDynamicOdds(tpl.betDynamic ?? false);
+    setMinBet(tpl.betMinAmount ?? 100000);
+    setMaxBetPct(tpl.betMaxRatio ?? 50);
+    setBetWindow(tpl.betDuration ?? 30);
 
     setShared(ss => ({
       ...ss,
@@ -1352,6 +1618,15 @@ function AdminApp(){
       feeRate: tpl.feeRate ?? 0.1,
       leverageEnabled: tpl.leverageEnabled ?? false,
       leverageMax: tpl.leverageMax ?? 2,
+      timelineSteps: tpl.timelineSteps
+        ? tpl.timelineSteps.map(x=>({...x}))
+        : INIT_SS.timelineSteps,
+      betEnabled: tpl.betEnabled ?? false,
+      baseOdds: tpl.betBaseOdds ?? 1.8,
+      dynamicOdds: tpl.betDynamic ?? false,
+      minBet: tpl.betMinAmount ?? 100000,
+      maxBetPct: tpl.betMaxRatio ?? 50,
+      betWindow: tpl.betDuration ?? 30,
       customTemplates: ss.customTemplates || [],
     }));
 
@@ -1419,9 +1694,9 @@ function AdminApp(){
       ...s,
       teamCredentials:{...(s.teamCredentials||{}),[name]:{id,pw,groupName:group}},
       teams:{...s.teams,[id]:{name,groupName:group,cash:s.initCash||DEFAULT_INIT_CASH,
-        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,points:0}},
+        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0}},
       groups:{...(s.groups||{}),[group]:{
-        points:(s.groups?.[group]?.points||0),
+        diamonds:(s.groups?.[group]?.diamonds||0),
         memberIds:[...(s.groups?.[group]?.memberIds||[]),id],
       }},
     }));
@@ -1443,7 +1718,7 @@ function AdminApp(){
       const pw=Math.random().toString(36).slice(2,8);
       newCreds[name]={id,pw,groupName:group};
       newTeams[id]={name,groupName:group,cash:shared.initCash||DEFAULT_INIT_CASH,
-        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,points:0};
+        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0};
       newMemberIds.push(id);
     }
     setShared(s=>({
@@ -1451,7 +1726,7 @@ function AdminApp(){
       teamCredentials:{...(s.teamCredentials||{}),...newCreds},
       teams:{...s.teams,...newTeams},
       groups:{...(s.groups||{}),[group]:{
-        points:(s.groups?.[group]?.points||0),
+        diamonds:(s.groups?.[group]?.diamonds||0),
         memberIds:[...(s.groups?.[group]?.memberIds||[]),...newMemberIds],
       }},
     }));
@@ -1474,19 +1749,57 @@ function AdminApp(){
 
   const giveGroupPoints=()=>{
     const amount=parseInt(groupPointInput)||0;
-    if(!amount){t2("포인트를 입력하세요");return;}
+    if(!amount){t2("다이아를 입력하세요");return;}
     setShared(s=>{
       const groups={...(s.groups||{})};
       const targets=pointGroupTarget==="전체"
         ?Array.from({length:16},(_,i)=>`${i+1}조`)
         :[pointGroupTarget];
       for(const g of targets){
-        if(groups[g]) groups[g]={...groups[g],points:(groups[g].points||0)+amount};
+        if(groups[g]) groups[g]={...groups[g],diamonds:(groups[g].diamonds||0)+amount};
       }
       return{...s,groups};
     });
     setGroupPointInput("");
-    t2(pointGroupTarget==="전체"?`전체 조에 ${amount}P 지급`:`${pointGroupTarget}에 ${amount}P 지급`);
+    t2(pointGroupTarget==="전체"?`전체 조에 ${amount}💎 지급`:`${pointGroupTarget}에 ${amount}💎 지급`);
+  };
+
+  const applySeedBalancing = () => {
+    const groups = shared.groups || {};
+    const memberCounts = Object.values(groups).map(g => (g.memberIds||[]).length);
+    if (memberCounts.length === 0) { t2("조가 없습니다"); return; }
+    const maxCount = Math.max(...memberCounts);
+    const baseCash = shared.initCash || DEFAULT_INIT_CASH;
+    setShared(s => {
+      const teams = { ...s.teams };
+      for (const [gname, gdata] of Object.entries(s.groups || {})) {
+        const memberIds = gdata.memberIds || [];
+        const count = memberIds.length;
+        if (count >= maxCount) continue;
+        const shortfall = maxCount - count;
+        const extraSeed = shortfall * baseCash;
+        const firstMemberId = memberIds[0];
+        if (!firstMemberId || !teams[firstMemberId]) continue;
+        teams[firstMemberId] = {
+          ...teams[firstMemberId],
+          cash: (teams[firstMemberId].cash || baseCash) + extraSeed,
+          history: [
+            ...(Array.isArray(teams[firstMemberId].history)
+              ? teams[firstMemberId].history : []),
+            {
+              time: new Date().toLocaleTimeString('ko-KR'),
+              type: 'bonus',
+              stockName: `시드 보정 (+${shortfall}인분)`,
+              stockEmoji: '🌱',
+              qty: 0, price: 0,
+              total: extraSeed,
+            }
+          ],
+        };
+      }
+      return { ...s, teams };
+    });
+    t2("시드 보정 완료");
   };
 
   // 라운드 제어
@@ -1668,7 +1981,7 @@ function AdminApp(){
       // Firebase가 빈 {}를 삭제하므로 _reset 플래그로 표시
       const freshTeams = {};
       for (const [name, { id, pw, groupName }] of Object.entries(savedCreds)) {
-        const existingPoints = current.teams?.[id]?.points || 0;
+        const existingPoints = current.teams?.[id]?.diamonds || 0;
         freshTeams[id] = {
           name,
           groupName: groupName || "",
@@ -1678,14 +1991,14 @@ function AdminApp(){
           history: ["_empty"],
           borrowed: 0,
           pw,
-          points: existingPoints,       // 포인트는 게임 초기화해도 유지
+          diamonds: existingPoints,       // 다이아는 게임 초기화해도 유지
         };
       }
-      // 조 포인트 유지, memberIds 유지
+      // 조 다이아 유지, memberIds 유지
       const savedGroups = {};
       if (current.groups) {
         for (const [g, v] of Object.entries(current.groups)) {
-          savedGroups[g] = { points: v.points || 0, memberIds: v.memberIds || [] };
+          savedGroups[g] = { diamonds: v.diamonds || 0, memberIds: v.memberIds || [] };
         }
       }
 
@@ -1754,7 +2067,7 @@ function AdminApp(){
         },0);
         return sum+(tm.cash||0)+sv;
       },0);
-      const groupPoints=shared.groups?.[group]?.points||0;
+      const groupPoints=shared.groups?.[group]?.diamonds||0;
       const memberCount=members.length;
       return{group,totalAsset,groupPoints,memberCount};
     }).filter(g=>g.memberCount>0).sort((a,b)=>b.totalAsset-a.totalAsset);
@@ -1788,6 +2101,87 @@ function AdminApp(){
 
         {/* ══ 진행 탭 ══ */}
         {tab==="control"&&<>
+          {/* 자동 타임라인 */}
+          {!shared.timelineAuto ? (
+            <Btn onClick={() => {
+              setShared(s => ({
+                ...s,
+                timelineAuto: true,
+                timelineIndex: -1,
+                timelineEndsAt: 0,
+              }));
+              t2("43분 자동 진행 시작!");
+            }} color={G.green}
+              style={{width:"100%",padding:"14px",fontSize:15,marginBottom:8}}>
+              ▶ 게임 자동 시작 (43분)
+            </Btn>
+          ) : (
+            <div style={{background:G.greenLight,borderRadius:14,padding:14,marginBottom:10}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.green,marginBottom:6}}>
+                ▶ 자동 진행 중
+              </div>
+              {(() => {
+                const steps = shared.timelineSteps || INIT_SS.timelineSteps;
+                const idx = shared.timelineIndex ?? -1;
+                const step = steps[idx];
+                const rem = shared.timelineEndsAt
+                  ? Math.max(0, Math.round((shared.timelineEndsAt - Date.now()) / 1000))
+                  : 0;
+                return (
+                  <div>
+                    <div style={{fontSize:14,fontWeight:600,color:G.black,marginBottom:4}}>
+                      {step ? step.label : "준비 중..."}
+                    </div>
+                    <div style={{fontSize:22,fontWeight:800,color:G.green,fontFamily:"monospace",marginBottom:8}}>
+                      {secToStr(rem)}
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <Btn onClick={() => setShared(s => ({...s, timelineEndsAt: 0}))}
+                        color={G.yellow} textColor={G.black}
+                        style={{flex:1,padding:"8px",fontSize:12}}>
+                        다음 단계 강제 진행
+                      </Btn>
+                      <Btn onClick={() => setShared(s => ({...s, timelineAuto: false}))}
+                        color={G.redLight} textColor={G.red}
+                        style={{flex:1,padding:"8px",fontSize:12}}>
+                        자동 진행 중단
+                      </Btn>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* 힌트 설정 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>
+              💡 종가 확인 힌트 설정
+            </div>
+            <div style={{fontSize:11,color:G.gray1,marginBottom:8}}>
+              종가 확인 단계에서 팀원에게 공개될 힌트
+            </div>
+            <textarea value={resultHintInput}
+              onChange={e=>setResultHintInput(e.target.value)}
+              placeholder="예) 다음 라운드에서 에너지 섹터 강세 예상"
+              rows={3}
+              style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,
+                padding:"9px 10px",fontSize:13,fontFamily:"inherit",outline:"none",
+                color:G.black,boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}/>
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <Btn onClick={()=>{
+                setShared(s=>({...s,resultHint:resultHintInput}));
+                t2("힌트 저장됨");
+              }} style={{flex:1,padding:"9px",fontSize:12}}>저장</Btn>
+              <Btn onClick={()=>{
+                setShared(s=>({...s,resultHint:""}));
+                setResultHintInput("");
+                t2("힌트 삭제됨");
+              }} color={G.redLight} textColor={G.red}
+                style={{flex:1,padding:"9px",fontSize:12}}>삭제</Btn>
+            </div>
+          </div>
+
           {/* 공지 */}
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>📢 전체 공지</div>
@@ -2304,9 +2698,9 @@ function AdminApp(){
                     <NumInput value={item.price} onChange={e=>updShop(item.id,"price",parseInt(e.target.value)||0)} style={{textAlign:"left"}}/>
                   </div>
                   <div style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
-                    <div style={{fontSize:11,color:G.purple,flexShrink:0,width:60}}>포인트가</div>
+                    <div style={{fontSize:11,color:G.purple,flexShrink:0,width:60}}>다이아</div>
                     <NumInput value={item.pointPrice||0} onChange={e=>updShop(item.id,"pointPrice",parseInt(e.target.value)||0)} style={{textAlign:"left"}}/>
-                    <span style={{fontSize:11,color:G.purple}}>P</span>
+                    <span style={{fontSize:11,color:G.purple}}>💎</span>
                   </div>
                   <div style={{marginBottom:6}}>
                     <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>구매 전 설명</div>
@@ -2435,6 +2829,12 @@ function AdminApp(){
 
         {/* ══ 팀 관리 탭 ══ */}
         {tab==="teams"&&<>
+          {/* 시드 불균형 보정 */}
+          <Btn onClick={applySeedBalancing} color={G.green}
+            style={{width:"100%",padding:"12px",fontSize:13,marginBottom:10}}>
+            🌱 시드 불균형 보정 (조원 적은 조 1명 추가 지급)
+          </Btn>
+
           {/* 개별 등록 */}
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>팀원 계정 등록</div>
@@ -2477,9 +2877,9 @@ function AdminApp(){
             <div style={{fontSize:11,color:G.blue}}>예) 1조 5명 → 1조-1 ~ 1조-5 자동 생성</div>
           </div>
 
-          {/* 조별 포인트 지급 */}
+          {/* 조별 다이아 지급 */}
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>💎 조별 포인트 지급</div>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>💎 조별 다이아 지급</div>
             <div style={{display:"flex",gap:8}}>
               <select value={pointGroupTarget} onChange={e=>setPointGroupTarget(e.target.value)}
                 style={{flex:1,border:`1.5px solid ${G.border}`,borderRadius:8,
@@ -2490,7 +2890,7 @@ function AdminApp(){
                 ))}
               </select>
               <NumInput value={groupPointInput} onChange={e=>setGroupPointInput(e.target.value)}
-                placeholder="포인트" style={{width:80,textAlign:"left"}}/>
+                placeholder="다이아" style={{width:80,textAlign:"left"}}/>
               <Btn onClick={giveGroupPoints} color={G.purple}
                 style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>지급</Btn>
             </div>
@@ -2518,13 +2918,13 @@ function AdminApp(){
                   },0);
                   return sum+(tm.cash||0)+sv;
                 },0);
-                const groupPoints=shared.groups?.[group]?.points||0;
+                const groupPoints=shared.groups?.[group]?.diamonds||0;
                 return(
                   <div key={group} style={{marginBottom:12}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <div style={{fontSize:13,fontWeight:700,color:G.black}}>{group} ({members.length}명)</div>
                       <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        {groupPoints>0&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {groupPoints}P</div>}
+                        {groupPoints>0&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {groupPoints}</div>}
                         <div style={{fontSize:11,color:G.gray1}}>합산 {fmt(groupAsset)}</div>
                       </div>
                     </div>
@@ -2665,7 +3065,7 @@ function AdminApp(){
                       <div style={{fontSize:15,fontWeight:800,color:G.black}}>{g.group}</div>
                       <div style={{fontSize:11,color:G.gray1}}>
                         {g.memberCount}명 참여
-                        {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:6}}>💎 {g.groupPoints}P</span>}
+                        {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:6}}>💎 {g.groupPoints}</span>}
                       </div>
                     </div>
                     <div style={{textAlign:"right"}}>
@@ -2872,7 +3272,7 @@ function UserApp(){
       const cur = snap.val() || {
         name: teamName,
         cash: shared.initCash || DEFAULT_INIT_CASH,
-        holdings: {}, purchases: [], history: [], borrowed: 0, points: 0,
+        holdings: {}, purchases: [], history: [], borrowed: 0, diamonds: 0,
       };
       if (cur.history && !Array.isArray(cur.history)) {
         cur.history = Object.values(cur.history).filter(x => x !== "_empty" && typeof x === 'object');
@@ -3019,11 +3419,11 @@ function UserApp(){
     const myGroupName=shared.teamCredentials?.[teamName]?.groupName;
     if(!myGroupName){t2("조 정보 없음");return;}
     const groupSnap=await get(GROUP_REF(myGroupName));
-    const groupData=groupSnap.val()||{points:0};
-    if((groupData.points||0)<pointCost){t2("조 포인트 부족");return;}
+    const groupData=groupSnap.val()||{diamonds:0};
+    if((groupData.diamonds||0)<pointCost){t2("조 다이아 부족");return;}
     await updTeam(t=>({...t,purchases:[...(t.purchases||[]),latest.id]}));
-    await fbSet(GROUP_REF(myGroupName),{...groupData,points:(groupData.points||0)-pointCost});
-    t2(`${latest.name} 구매 완료! (-${pointCost}P)`);
+    await fbSet(GROUP_REF(myGroupName),{...groupData,diamonds:(groupData.diamonds||0)-pointCost});
+    t2(`${latest.name} 구매 완료! (-${pointCost}💎)`);
   };
 
   const sendChat = () => {
@@ -3176,7 +3576,7 @@ function UserApp(){
         },0);
         return sum+(tm.cash||0)+sv;
       },0);
-      const groupPoints=shared.groups?.[group]?.points||0;
+      const groupPoints=shared.groups?.[group]?.diamonds||0;
       return{group,total,memberCount:members.length,groupPoints};
     }).filter(g=>g.memberCount>0).sort((a,b)=>b.total-a.total);
     const myGroupRank=groupRank.findIndex(g=>g.group===myGroupName)+1;
@@ -3198,7 +3598,7 @@ function UserApp(){
             </div>
             {myGroupRank>0&&<div style={{marginTop:12,fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:600}}>
               {groupRank.length}개 조 중 {myGroupRank}위 {myGroupRank===1?"🥇":myGroupRank===2?"🥈":myGroupRank===3?"🥉":""}
-              {(myGroupData?.groupPoints||0)>0&&<span style={{marginLeft:8}}>💎 {myGroupData.groupPoints}P</span>}
+              {(myGroupData?.groupPoints||0)>0&&<span style={{marginLeft:8}}>💎 {myGroupData.groupPoints}</span>}
             </div>}
           </div>
           <div style={{padding:"16px"}}>
@@ -3221,7 +3621,7 @@ function UserApp(){
                       </div>
                       <div style={{fontSize:11,color:G.gray1}}>
                         {g.memberCount}명
-                        {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:4}}>💎 {g.groupPoints}P</span>}
+                        {g.groupPoints>0&&<span style={{color:G.purple,marginLeft:4}}>💎 {g.groupPoints}</span>}
                       </div>
                     </div>
                     <div style={{textAlign:"right"}}>
@@ -3434,6 +3834,16 @@ function UserApp(){
   }
 
   /* ── 메인 ── */
+  const steps = shared.timelineSteps || INIT_SS.timelineSteps;
+  const curStep = steps[shared.timelineIndex ?? -1];
+  const stepRem = shared.timelineEndsAt
+    ? Math.max(0, Math.round((shared.timelineEndsAt - Date.now()) / 1000))
+    : null;
+  const isBettingPhase =
+    shared.currentPhaseDetail === "betting"
+    && !!shared.betDeadline
+    && shared.betDeadline > Date.now()
+    && shared.betEnabled;
   return(
     <div style={W.wrap}>
       <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
@@ -3453,24 +3863,29 @@ function UserApp(){
             </div>
             {(()=>{
               const mgn=shared.teamCredentials?.[teamName]?.groupName;
-              const gp=shared.groups?.[mgn]?.points||0;
+              const gp=shared.groups?.[mgn]?.diamonds||0;
               return gp>0&&mgn?(
-                <div style={{fontSize:12,color:G.purple,fontWeight:600,marginTop:2}}>💎 {gp}P ({mgn})</div>
+                <div style={{fontSize:12,color:G.purple,fontWeight:600,marginTop:2}}>💎 {gp} ({mgn})</div>
               ):null;
             })()}
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{background:shared.phase==="round"?G.greenLight:shared.phase==="break"?G.yellowLight:G.gray4,
-              color:shared.phase==="round"?G.green:shared.phase==="break"?G.yellow:G.gray1,
-              borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,marginBottom:3}}>
-              {shared.phase==="ready"
-                ?(shared.betDeadline&&shared.betDeadline>Date.now()?"🎲 베팅 진행 중":"대기중")
-                :shared.phase==="round"?`Round ${shared.round}`
-                :shared.phase==="break"?`R${shared.round} 종료`:"게임종료"}
+            <div style={{background:
+              shared.phase==="round"?G.greenLight:
+              shared.currentPhaseDetail==="betting"?G.purpleLight:
+              shared.currentPhaseDetail==="result"?G.yellowLight:G.gray4,
+              color:
+              shared.phase==="round"?G.green:
+              shared.currentPhaseDetail==="betting"?G.purple:
+              shared.currentPhaseDetail==="result"?G.yellow:G.gray1,
+              borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,marginBottom:3,display:"inline-block"}}>
+              {curStep ? curStep.label : "대기중"}
             </div>
-            {shared.phase==="round"&&rem!==null&&<div style={{fontSize:14,fontWeight:800,color:rem<=60?G.red:G.black,fontFamily:"monospace"}}>⏱ {secToStr(rem)}</div>}
-            {shared.phase==="break"&&breakRem!==null&&<div style={{fontSize:13,fontWeight:700,color:G.yellow,fontFamily:"monospace"}}>휴식 {secToStr(breakRem)}</div>}
-            {(shared.phase==="break"||shared.phase==="ready")&&betRem!==null&&betRem>0&&<div style={{fontSize:11,fontWeight:700,color:G.orange}}>🎯 베팅 {secToStr(betRem)}</div>}
+            {stepRem !== null && (
+              <div style={{fontSize:14,fontWeight:800,color:stepRem<=30?G.red:stepRem<=60?G.orange:G.black,fontFamily:"monospace"}}>
+                ⏱ {secToStr(stepRem)}
+              </div>
+            )}
           </div>
         </div>
         <div style={{display:"flex"}}>
@@ -3495,7 +3910,7 @@ function UserApp(){
           )}
 
           {/* 방향 예측 베팅 패널 */}
-          {(shared.phase==="break"||shared.phase==="ready")&&shared.betEnabled&&shared.betDeadline&&shared.betDeadline>Date.now()&&(
+          {isBettingPhase&&(
             <div style={{background:G.white,margin:"0 0 8px",padding:"14px 18px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div>
@@ -3593,6 +4008,31 @@ function UserApp(){
             </div>
           )}
 
+          {shared.currentPhaseDetail==="result" && (
+            <div style={{background:G.yellowLight,margin:"8px 14px",borderRadius:12,padding:"12px 14px",border:`1.5px solid ${G.yellow}`}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.yellow,marginBottom:6}}>📊 R{shared.round} 종가 확인</div>
+              {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
+                const closePrice=st.prices[Math.min((shared.round||1)-1,st.prices.length-1)];
+                const prevPrice=shared.round>1?st.prices[Math.min((shared.round||1)-2,st.prices.length-1)]:st.prices[0];
+                const diff=closePrice&&prevPrice?((closePrice-prevPrice)/prevPrice*100).toFixed(2):null;
+                return(
+                  <div key={st.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${G.border}`}}>
+                    <div style={{fontSize:12,fontWeight:600,color:G.black}}>{st.emoji} {st.name}</div>
+                    <div style={{textAlign:"right"}}>
+                      <span style={{fontSize:13,fontWeight:700,color:G.black}}>{closePrice?fmtN(closePrice):"?"}</span>
+                      {diff!==null&&<span style={{fontSize:11,fontWeight:600,marginLeft:6,color:parseFloat(diff)>0?G.red:parseFloat(diff)<0?G.blue:G.gray1}}>{parseFloat(diff)>0?"+":""}{diff}%</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              {shared.resultHint && (
+                <div style={{marginTop:8,padding:"8px 10px",background:G.white,borderRadius:8,fontSize:12,color:G.gray1,lineHeight:1.5}}>
+                  💡 {shared.resultHint}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{padding:"10px 18px 5px",fontSize:12,color:G.gray1,fontWeight:500}}>
             종목 현황 {shared.phase==="round"?`· Round ${shared.round}`:""}
             {isBlind&&<span style={{color:G.purple,marginLeft:6}}>🙈 블라인드</span>}
@@ -3678,15 +4118,15 @@ function UserApp(){
 
         {tab==="shop"&&(()=>{
           const _mgn=shared.teamCredentials?.[teamName]?.groupName;
-          const _gp=shared.groups?.[_mgn]?.points||0;
+          const _gp=shared.groups?.[_mgn]?.diamonds||0;
           return(<>
           <div style={{padding:"10px 18px 5px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{fontSize:12,color:G.gray1,fontWeight:500}}>포인트 상점</div>
-            <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {_gp}P {_mgn?`(${_mgn})`:""}</div>
+            <div style={{fontSize:12,color:G.gray1,fontWeight:500}}>다이아 상점</div>
+            <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {_gp} {_mgn?`(${_mgn})`:""}</div>
           </div>
           <div style={{padding:"0 14px 8px"}}>
             <div style={{background:G.purpleLight,borderRadius:11,padding:"11px 13px",fontSize:13,color:G.purple,fontWeight:500,lineHeight:1.5}}>
-              💎 포인트로만 구매 가능한 특별 정보입니다
+              💎 다이아로만 구매 가능한 특별 정보입니다
             </div>
           </div>
           {(shared.shopItems||[]).map(item=>{
@@ -3703,14 +4143,14 @@ function UserApp(){
                       {bought&&<span style={{fontSize:11,background:G.greenLight,color:G.green,borderRadius:20,padding:"2px 8px",fontWeight:600}}>구매완료</span>}
                     </div>
                     <div style={{fontSize:12,color:G.gray1,marginBottom:6,lineHeight:1.5}}>{item.desc}</div>
-                    <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {pointCost}P</div>
+                    <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {pointCost}</div>
                   </div>
                   <button onClick={()=>buyShop(item)} disabled={bought||!canAfford}
                     style={{background:bought?G.greenLight:!canAfford?G.bg:G.purple,
                       color:bought?G.green:!canAfford?G.gray2:G.white,
                       border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,
                       cursor:bought||!canAfford?"not-allowed":"pointer",fontFamily:"inherit",flexShrink:0}}>
-                    {bought?"✓":!canAfford?"P부족":"구매"}
+                    {bought?"✓":!canAfford?"💎부족":"구매"}
                   </button>
                 </div>
                 {bought&&(
