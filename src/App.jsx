@@ -3518,12 +3518,21 @@ function AdminApp({onBack=null}){
 ══════════════════════════════════════════ */
 function UserApp({previewAs=null,onBack=null}){
   const shared=useShared();
-  const [screen,setScreen]=useState(previewAs?"main":"login");
+  const SESSION_TTL = 15 * 60 * 1000;
+  const _savedSession=(()=>{
+    if(previewAs) return null;
+    try{
+      const s=localStorage.getItem('sg_session');
+      if(s){const {id,name,ts}=JSON.parse(s);if(id&&name&&Date.now()-ts<SESSION_TTL) return {id,name};}
+    }catch(e){}
+    return null;
+  })();
+  const [screen,setScreen]=useState(previewAs?"main":_savedSession?"main":"login");
   const [loginName,setLoginName]=useState("");
   const [loginPw,setLoginPw]=useState("");
   const [loginErr,setLoginErr]=useState("");
-  const [teamId,setTeamId]=useState(previewAs?.teamId||null);
-  const [teamName,setTeamName]=useState(previewAs?.teamName||"");
+  const [teamId,setTeamId]=useState(previewAs?.teamId||_savedSession?.id||null);
+  const [teamName,setTeamName]=useState(previewAs?.teamName||_savedSession?.name||"");
 
   useEffect(()=>{
     if(!previewAs) return;
@@ -3552,28 +3561,6 @@ function UserApp({previewAs=null,onBack=null}){
   const [tradeQty, setTradeQty] = useState(1);
   const [tradePrice, setTradePrice] = useState(0);
   const [tradeTo, setTradeTo] = useState("전체공개");
-
-  const SESSION_TTL = 15 * 60 * 1000; // 15분
-
-  useEffect(() => {
-    if (screen !== "login") return;
-    if (!shared.teams || Object.keys(shared.teams).length === 0) return;
-    try {
-      const saved = localStorage.getItem('sg_session');
-      if (saved) {
-        const { id, name, ts } = JSON.parse(saved);
-        if (id && name && shared.teams[id] && Date.now() - ts < SESSION_TTL) {
-          // 복원 시 타임스탬프 갱신 (활동 중이면 10분 연장)
-          localStorage.setItem('sg_session', JSON.stringify({ id, name, ts: Date.now() }));
-          setTeamId(id);
-          setTeamName(name);
-          setScreen("main");
-        } else {
-          localStorage.removeItem('sg_session');
-        }
-      }
-    } catch(e) {}
-  }, [shared.teams, screen]);
 
   useEffect(() => {
     if (screen === "ended") {
@@ -5029,7 +5016,6 @@ export default function App(){
     setAuth(true);
   };
   const handleAdminBack=()=>{
-    try{localStorage.removeItem(ADMIN_SESSION_KEY);}catch(e){}
     setMode("select");setAuth(false);
   };
 
