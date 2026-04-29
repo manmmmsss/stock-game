@@ -445,7 +445,8 @@ const BUILT_IN_TEMPLATES = [
       {id:"s5",name:"E 바이오",code:"EBIO",emoji:"🧬",initialPrice:15000,prices:[16200,12150,17980],totalSupply:0,listed:true},
       {id:"s6",name:"F 바이오",code:"FBIO",emoji:"🧪",initialPrice:3000,prices:[3120,2180,2440],totalSupply:0,listed:true},
       {id:"s7",name:"G 식품",code:"GFOOD",emoji:"🍞",initialPrice:9000,prices:[10620,9340,11210],totalSupply:0,listed:true},
-      {id:"s8",name:"H 뷰티",code:"HBEAU",emoji:"💄",initialPrice:25000,prices:[15500,10850,1],totalSupply:0,listed:true},
+      {id:"s8",name:"H 뷰티",code:"HBEAU",emoji:"💄",initialPrice:25000,prices:[15500,10850,1],totalSupply:0,listed:true,
+        autoDelist:{round:3,phase:"roundStart",forceSell:true,reason:"3라운드 상장폐지"}},
       {id:"s9",name:"I 화학",code:"ICHEM",emoji:"🧫",initialPrice:10000,prices:[10600,6150,2770],totalSupply:0,listed:true},
       {id:"s10",name:"J 조선",code:"JSHIP",emoji:"🚢",initialPrice:30000,prices:[31500,25200,13100],totalSupply:0,listed:true},
     ],
@@ -746,6 +747,76 @@ const getRoundClosePrice = (stock, round) => {
 const getRoundStartPrice = (stock, round) => {
   if (!stock) return 0;
   return round <= 1 ? getInitialPrice(stock) : getRoundClosePrice(stock, round - 1);
+};
+const getAutoDelistRule = (stock, round, phase = "roundStart") => {
+  const rule = stock?.autoDelist;
+  if (!rule) return null;
+  if ((rule.round ?? null) !== round) return null;
+  if ((rule.phase || "roundStart") !== phase) return null;
+  return rule;
+};
+const applyScheduledDelistings = (state, round, phase = "roundStart") => {
+  const stocks = Array.isArray(state.stocks) ? state.stocks : [];
+  const autoTargets = stocks
+    .filter(stock => stock?.listed !== false)
+    .map(stock => ({ stock, rule: getAutoDelistRule(stock, round, phase) }))
+    .filter(x => !!x.rule);
+
+  if (autoTargets.length === 0) return { nextState: state, delistedNames: [] };
+
+  const teams = { ...(state.teams || {}) };
+  const nextStocks = stocks.map(stock => {
+    const match = autoTargets.find(x => x.stock.id === stock.id);
+    return match
+      ? {
+          ...stock,
+          listed: false,
+          autoDelistedAtRound: round,
+          autoDelistedAtPhase: phase,
+          delistReason: match.rule.reason || "자동 상장폐지",
+        }
+      : stock;
+  });
+
+  for (const { stock, rule } of autoTargets) {
+    const settlePrice = Math.max(rule.forceSellPrice ?? getRoundStartPrice(stock, round), 1);
+    for (const [tid, tm] of Object.entries(teams)) {
+      const qty = tm.holdings?.[stock.id]?.qty || 0;
+      if (qty <= 0) continue;
+      const proceeds = qty * settlePrice;
+      const holdings = { ...(tm.holdings || {}) };
+      delete holdings[stock.id];
+      teams[tid] = {
+        ...tm,
+        cash: (tm.cash || 0) + proceeds,
+        holdings,
+        history: [
+          ...(Array.isArray(tm.history) ? tm.history : []),
+          {
+            time: new Date().toLocaleTimeString("ko-KR"),
+            type: "sell",
+            stockName: `${stock.name}(자동폐지)`,
+            stockEmoji: stock.emoji,
+            qty,
+            price: settlePrice,
+            total: proceeds,
+          },
+        ],
+      };
+    }
+  }
+
+  const delistedNames = autoTargets.map(({ stock }) => stock.name);
+  return {
+    nextState: {
+      ...state,
+      teams,
+      stocks: nextStocks,
+      notice: `자동 폐지: ${delistedNames.join(", ")}`,
+      noticeAt: Date.now(),
+    },
+    delistedNames,
+  };
 };
 
 function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots) {
@@ -1898,26 +1969,36 @@ function AdminApp(){
   const startRound=r=>{
     const rc=shared.rounds?.[r-1]||rounds[r-1];
     const dur=(rc?.durationMin||5)*60*1000,now=Date.now();
-    setShared(s=>({...s,phase:"round",round:r,roundStartedAt:now,roundEndsAt:now+dur,
-      stocks:stocks.map(x=>({...x,prices:[...x.prices]})),
-      shopItems:shopItems.map(x=>({...x})),rounds:rounds.map(x=>({...x})),
-      eventPresets:eventPresets.map(x=>({...x})),maxRound,initCash,feeRate,leverageEnabled,leverageMax,
-      modifiedTargets:{},
-      priceHistory:{},
-      eventSnapshots:{},
-      betEnabled,baseOdds,dynamicOdds,minBet,maxBetPct,betOdds:{},
-      nextAutoEventAt:(()=>{
-        const autoEvents=eventPresets.filter(e=>e.autoTrigger);
-        if(autoEvents.length===0) return null;
-        const ev=autoEvents[0];
-        const minMs=(ev.triggerIntervalMin||1)*60*1000;
-        const maxMs=(ev.triggerIntervalMax||3)*60*1000;
-        return Date.now()+minMs+Math.random()*(maxMs-minMs);
-      })(),
-      breakEndsAt:null,
-      betDeadline:null,
-    }));
-    t2(`Round ${r} 시작 (${rc?.durationMin||5}분)`);
+    let autoDelistedNames = [];
+    setShared(s=>{
+      const baseState = {...s,phase:"round",round:r,roundStartedAt:now,roundEndsAt:now+dur,
+        stocks:stocks.map(x=>({...x,prices:[...x.prices]})),
+        shopItems:shopItems.map(x=>({...x})),rounds:rounds.map(x=>({...x})),
+        eventPresets:eventPresets.map(x=>({...x})),maxRound,initCash,feeRate,leverageEnabled,leverageMax,
+        modifiedTargets:{},
+        priceHistory:{},
+        eventSnapshots:{},
+        betEnabled,baseOdds,dynamicOdds,minBet,maxBetPct,betOdds:{},
+        nextAutoEventAt:(()=>{
+          const autoEvents=eventPresets.filter(e=>e.autoTrigger);
+          if(autoEvents.length===0) return null;
+          const ev=autoEvents[0];
+          const minMs=(ev.triggerIntervalMin||1)*60*1000;
+          const maxMs=(ev.triggerIntervalMax||3)*60*1000;
+          return Date.now()+minMs+Math.random()*(maxMs-minMs);
+        })(),
+        breakEndsAt:null,
+        betDeadline:null,
+      };
+      const { nextState, delistedNames } = applyScheduledDelistings(baseState, r, "roundStart");
+      autoDelistedNames = delistedNames;
+      return nextState;
+    });
+    t2(
+      autoDelistedNames.length > 0
+        ? `Round ${r} 시작 (${rc?.durationMin||5}분) — 자동 폐지: ${autoDelistedNames.join(", ")}`
+        : `Round ${r} 시작 (${rc?.durationMin||5}분)`
+    );
   };
   const stopRound=()=>{
     const r=shared.round;
