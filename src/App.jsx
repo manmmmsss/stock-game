@@ -2529,36 +2529,24 @@ function AdminApp(){
             <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💬 채팅 관리</div>
 
             {/* 채팅 전송 */}
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
-              <TextInput
-                value={adminChatInput}
-                onChange={e=>setAdminChatInput(e.target.value)}
-                onKeyDown={e=>{
-                  if(e.key==="Enter"){
-                    const text=adminChatInput.trim();
-                    if(!text) return;
-                    const msg={id:uid(),teamName:"🛠 운영자",text,ts:Date.now()};
-                    setShared(s=>({...s,
-                      chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200)
-                    }));
-                    setAdminChatInput("");
-                    t2("채팅 전송됨");
-                  }
-                }}
-                placeholder="운영자로 채팅 전송 (Enter)"
-                style={{flex:1}}
-              />
-              <Btn onClick={()=>{
+            {(()=>{
+              const sendAdminChat=()=>{
                 const text=adminChatInput.trim();
                 if(!text){t2("메시지를 입력하세요");return;}
                 const msg={id:uid(),teamName:"🛠 운영자",text,ts:Date.now()};
-                setShared(s=>({...s,
-                  chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200)
-                }));
+                setShared(s=>({...s,chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200)}));
                 setAdminChatInput("");
                 t2("채팅 전송됨");
-              }} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
-            </div>
+              };
+              return(
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <TextInput value={adminChatInput} onChange={e=>setAdminChatInput(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&sendAdminChat()}
+                    placeholder="운영자로 채팅 전송 (Enter)" style={{flex:1}}/>
+                  <Btn onClick={sendAdminChat} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
+                </div>
+              );
+            })()}
 
             {/* 채팅 미리보기 + 개별 삭제 */}
             <div style={{maxHeight:200,overflowY:"auto",marginBottom:8}}>
@@ -2660,8 +2648,8 @@ function AdminApp(){
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:shared.autoPlay&&shared.phase==="break"?10:0}}>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:G.black}}>자동 진행</div>
-                <div style={{fontSize:11,color:G.gray1}}>라운드 종료 후 휴식시간({breakDuration}s) 뒤 자동 시작</div>
+                <div style={{fontSize:13,fontWeight:700,color:G.black}}>Break 후 자동 시작</div>
+                <div style={{fontSize:11,color:G.gray1}}>휴식({breakDuration}s) 끝나면 다음 라운드 자동 시작 (수동 제어 시 사용)</div>
               </div>
               <div onClick={()=>setShared(s=>({...s,autoPlay:!s.autoPlay}))}
                 style={{width:44,height:26,borderRadius:13,background:shared.autoPlay?G.green:G.gray3,
@@ -2718,7 +2706,7 @@ function AdminApp(){
 
           <div style={{display:"flex",gap:8,marginBottom:10}}>
             <Btn onClick={stopRound} color={G.yellow} textColor={G.black} style={{flex:1,padding:"12px 0"}}>라운드 종료</Btn>
-            <Btn onClick={endGame} color={G.black} style={{flex:1,padding:"12px 0"}}>게임 종료</Btn>
+            <Btn onClick={()=>{if(!window.confirm("게임을 종료하시겠습니까?")) return; endGame();}} color={G.black} style={{flex:1,padding:"12px 0"}}>게임 종료</Btn>
           </div>
 
           {/* 종목 상장/폐지 */}
@@ -2760,7 +2748,7 @@ function AdminApp(){
             </div>
           </div>
 
-          <Btn onClick={resetGame} color={G.redLight} textColor={G.red} style={{width:"100%",padding:"12px",fontSize:13}}>게임 초기화 (설정·팀 유지)</Btn>
+          <Btn onClick={()=>{if(!window.confirm("게임을 초기화합니다.\n모든 팀의 자산·거래내역이 초기화됩니다.\n설정과 팀 등록 정보는 유지됩니다.\n계속하시겠습니까?")) return; resetGame();}} color={G.redLight} textColor={G.red} style={{width:"100%",padding:"12px",fontSize:13}}>🔄 게임 초기화 (설정·팀 유지)</Btn>
         </>}
 
         {/* ══ 설정 탭 ══ */}
@@ -3023,11 +3011,7 @@ function AdminApp(){
                     <div onClick={()=>delShop(item.id)} style={{width:32,height:34,borderRadius:7,background:G.redLight,color:G.red,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:16,flexShrink:0,fontWeight:700}}>×</div>
                   </div>
                   <div style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
-                    <div style={{fontSize:11,color:G.gray2,flexShrink:0,width:36}}>가격</div>
-                    <NumInput value={item.price} onChange={e=>updShop(item.id,"price",parseInt(e.target.value)||0)} style={{textAlign:"left"}}/>
-                  </div>
-                  <div style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
-                    <div style={{fontSize:11,color:G.purple,flexShrink:0,width:60}}>다이아</div>
+                    <div style={{fontSize:11,color:G.purple,flexShrink:0,width:60}}>다이아 가격</div>
                     <NumInput value={item.pointPrice||0} onChange={e=>updShop(item.id,"pointPrice",parseInt(e.target.value)||0)} style={{textAlign:"left"}}/>
                     <span style={{fontSize:11,color:G.purple}}>💎</span>
                   </div>
@@ -3080,7 +3064,7 @@ function AdminApp(){
                         <TextInput value={ev.name} onChange={e=>updEvent(ev.id,"name",e.target.value)} placeholder="이벤트 이름" style={{flex:1}}/>
                       </div>
                       <div style={{marginBottom:8}}>
-                        <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>공개 설명 (팀장 화면 표시)</div>
+                        <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>공개 설명 (팀원 화면 표시)</div>
                         <TextInput value={ev.desc} onChange={e=>updEvent(ev.id,"desc",e.target.value)} placeholder="공개 설명"/>
                       </div>
                       <div style={{background:G.bg,borderRadius:10,padding:"10px 12px",marginBottom:10}}>
@@ -3338,7 +3322,10 @@ function AdminApp(){
                   <div onClick={()=>setSelTeam(isOpen?null:id)}
                     style={{padding:"13px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
-                      <div style={{fontSize:14,fontWeight:700,color:G.black}}>{tm.name}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{fontSize:14,fontWeight:700,color:G.black}}>{tm.name}</div>
+                        {tm.groupName&&<div style={{fontSize:10,color:G.gray1,background:G.bg,borderRadius:4,padding:"1px 6px"}}>{tm.groupName}</div>}
+                      </div>
                       <div style={{fontSize:11,color:G.gray1,marginTop:1}}>총 자산 {fmt(tm.cash+sv)}</div>
                     </div>
                     <span style={{color:G.gray2,fontSize:14}}>{isOpen?"▲":"▼"}</span>
