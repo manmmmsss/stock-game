@@ -733,6 +733,25 @@ const INIT_SS={
   resultHint: "",
 };
 
+const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, initCash = DEFAULT_INIT_CASH) => {
+  const freshTeams = {};
+  for (const [name, { id, pw, groupName }] of Object.entries(teamCredentials || {})) {
+    const existingPoints = existingTeams?.[id]?.diamonds || 0;
+    freshTeams[id] = {
+      name,
+      groupName: groupName || "",
+      cash: initCash,
+      holdings: { _empty: true },
+      purchases: ["_empty"],
+      history: ["_empty"],
+      borrowed: 0,
+      pw,
+      diamonds: existingPoints,
+    };
+  }
+  return freshTeams;
+};
+
 
 
 /* ══════════════════════════════════════════
@@ -1706,12 +1725,13 @@ function AdminApp(){
     const r = tpl.rounds.map(x => ({ ...x, dividends: { ...(x.dividends || {}) } }));
     const si = tpl.shopItems ? tpl.shopItems.map(x => ({ ...x })) : shopItems;
     const ep = tpl.eventPresets ? tpl.eventPresets.map(x => ({ ...x, stockEffects: { ...(x.stockEffects || {}) } })) : eventPresets;
+    const nextInitCash = tpl.initCash;
     setStocks(s);
     setRounds(r);
     setShopItems(si);
     setEventPresets(ep);
     setMaxRound(tpl.maxRound);
-    setInitCash(tpl.initCash);
+    setInitCash(nextInitCash);
     setFeeRate(tpl.feeRate ?? 0.1);
     setLeverageEnabled(tpl.leverageEnabled ?? false);
     setLeverageMax(tpl.leverageMax ?? 2);
@@ -1729,7 +1749,7 @@ function AdminApp(){
       shopItems: si,
       eventPresets: ep,
       maxRound: tpl.maxRound,
-      initCash: tpl.initCash,
+      initCash: nextInitCash,
       feeRate: tpl.feeRate ?? 0.1,
       leverageEnabled: tpl.leverageEnabled ?? false,
       leverageMax: tpl.leverageMax ?? 2,
@@ -1742,6 +1762,26 @@ function AdminApp(){
       minBet: tpl.betMinAmount ?? 100000,
       maxBetPct: tpl.betMaxRatio ?? 50,
       betWindow: tpl.betDuration ?? 30,
+      teams: buildFreshTeamsFromCreds(ss.teamCredentials || {}, ss.teams || {}, nextInitCash),
+      phase: "ready",
+      round: 0,
+      roundStartedAt: null,
+      roundEndsAt: null,
+      activeEvent: null,
+      eventHistory: [],
+      notice: "",
+      noticeAt: null,
+      modifiedTargets: {},
+      nextAutoEventAt: null,
+      priceHistory: {},
+      chatMessages: Array.isArray(ss.chatMessages) ? ss.chatMessages : [],
+      tradeOffers: {},
+      bonusPool: ss.bonusPool || {},
+      breakEndsAt: null,
+      betDeadline: null,
+      bets: {},
+      betOdds: {},
+      eventSnapshots: {},
       customTemplates: ss.customTemplates || [],
     }));
 
