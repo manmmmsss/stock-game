@@ -762,7 +762,12 @@ const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, init
 /* ══════════════════════════════════════════
    실시간 주가 계산 (선형보간 + 노이즈)
 ══════════════════════════════════════════ */
-const getInitialPrice = (stock) => stock?.initialPrice ?? stock?.prices?.[0] ?? 0;
+const getInitialPrice = (stock) => {
+  if (stock?.initialPrice !== undefined) return stock.initialPrice;
+  // initialPrice 미설정 시: prices[0]의 90%를 시작가로 유도 → 1라운드도 가격 변동 발생
+  const r1 = stock?.prices?.[0] ?? 0;
+  return r1 ? Math.round(r1 * 0.90) : 0;
+};
 const getRoundClosePrice = (stock, round) => {
   if (!stock) return 0;
   const ri = Math.min(Math.max(round - 1, 0), stock.prices.length - 1);
