@@ -1513,6 +1513,7 @@ function AdminApp(){
   const [breakRem,setBreakRem]=useState(null);
   const [betRem,setBetRem]=useState(null);
   const [resultHintInput,setResultHintInput]=useState("");
+  const [previewTeamId,setPreviewTeamId]=useState(null);
 
   // shared → 로컬 설정 동기화
   useEffect(()=>{
@@ -2094,7 +2095,7 @@ function AdminApp(){
   const phaseLabel=shared.phase==="ready"?"대기중":shared.phase==="round"?`R${shared.round} 진행중`:shared.phase==="break"?`R${shared.round} 종료`:"게임종료";
   const phaseBg=shared.phase==="round"?G.greenLight:shared.phase==="break"?G.yellowLight:shared.phase==="ended"?G.redLight:G.gray4;
   const phaseColor=shared.phase==="round"?G.green:shared.phase==="break"?G.yellow:shared.phase==="ended"?G.red:G.gray1;
-  const TABS=[["control","진행"],["settings","설정"],["teams","팀"],["accounts","계좌"],["rank","순위"]];
+  const TABS=[["control","진행"],["settings","설정"],["teams","팀"],["accounts","계좌"],["rank","순위"],["preview","👁 미리보기"]];
 
   const allTemplates=[...BUILT_IN_TEMPLATES,...(shared.customTemplates||[])];
 
@@ -3102,6 +3103,184 @@ function AdminApp(){
             }
           </div>
         )}
+
+        {/* ══ 미리보기 탭 ══ */}
+        {tab==="preview"&&(()=>{
+          const teamList=Object.entries(shared.teamCredentials||{}).map(([name,v])=>({name,id:v.id,groupName:v.groupName}));
+          const pvId=previewTeamId||(teamList[0]?.id||null);
+          const pvTeam=pvId?shared.teams?.[pvId]:null;
+          const pvCred=teamList.find(t=>t.id===pvId);
+          const pvName=pvCred?.name||"";
+          const pvGroup=pvCred?.groupName||"";
+          const pvCash=pvTeam?.cash??0;
+          const pvHoldings=pvTeam?.holdings||{};
+          const round=shared.round||1;
+          const isBlind=(shared.rounds?.[round-1]?.blind)||false;
+          const pvStockVal=Object.entries(pvHoldings).reduce((acc,[sid,h])=>{
+            if(sid==="_empty") return acc;
+            const st=(shared.stocks||[]).find(x=>x.id===sid);
+            if(!st) return acc;
+            const price=isBlind?st.prices[Math.max(round-2,0)]:getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots);
+            return acc+(price||0)*(h.qty||0);
+          },0);
+          const pvTotal=pvCash+pvStockVal;
+          const pvInitCash=shared.initCash||DEFAULT_INIT_CASH;
+          const pvDiff=pvTotal-pvInitCash;
+          const pvGp=shared.groups?.[pvGroup]?.diamonds||0;
+          const tlSteps=shared.timelineSteps||INIT_SS.timelineSteps;
+          const curStepIdx=shared.timelineIndex??-1;
+          const curSt=tlSteps[curStepIdx];
+          const sRem=shared.timelineEndsAt?Math.max(0,Math.round((shared.timelineEndsAt-Date.now())/1000)):null;
+          const betDeadlineOk=shared.betDeadline&&shared.betDeadline>Date.now();
+          const pvIsBetting=shared.currentPhaseDetail==="betting"&&betDeadlineOk&&shared.betEnabled;
+          const betRem2=betDeadlineOk?Math.max(0,Math.round((shared.betDeadline-Date.now())/1000)):null;
+          return(<>
+            {/* 팀 선택 */}
+            <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+              <div style={{fontSize:12,fontWeight:700,color:G.black,marginBottom:8}}>팀 선택</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {teamList.map(t=>(
+                  <div key={t.id} onClick={()=>setPreviewTeamId(t.id)}
+                    style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",
+                      background:pvId===t.id?G.blue:G.bg,color:pvId===t.id?G.white:G.gray1,
+                      border:`1.5px solid ${pvId===t.id?G.blue:G.border}`}}>
+                    {t.name} {t.groupName?`(${t.groupName})`:""}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 팀원 화면 시뮬레이션 */}
+            {pvId&&(
+              <div style={{background:G.white,borderRadius:14,overflow:"hidden",border:`1.5px solid ${G.blue}44`}}>
+                {/* 헤더 */}
+                <div style={{background:G.white,padding:"14px 16px 0",borderBottom:`1px solid ${G.border}`}}>
+                  {shared.notice&&<div style={{marginBottom:8}}><NoticeBanner notice={shared.notice}/></div>}
+                  {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent}/></div>}
+                  {isBlind&&<div style={{background:G.purpleLight,padding:"5px 12px",marginBottom:8,borderRadius:8}}>
+                    <span style={{fontSize:11,color:G.purple,fontWeight:700}}>🙈 블라인드 라운드</span>
+                  </div>}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:11,color:G.gray1,marginBottom:1}}>{pvName}팀</div>
+                      <div style={{fontSize:22,fontWeight:800,color:G.black}}>{fmt(pvTotal)}</div>
+                      <div style={{fontSize:12,fontWeight:600,color:pvDiff>=0?G.red:G.blue,marginTop:1}}>
+                        {pvDiff>=0?"▲ +":"▼ "}{fmt(Math.abs(pvDiff))}
+                      </div>
+                      {pvGp>0&&pvGroup&&<div style={{fontSize:11,color:G.purple,fontWeight:600,marginTop:2}}>💎 {pvGp} ({pvGroup})</div>}
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{background:
+                        shared.phase==="round"?G.greenLight:
+                        shared.currentPhaseDetail==="betting"?G.purpleLight:
+                        shared.currentPhaseDetail==="result"?G.yellowLight:G.gray4,
+                        color:
+                        shared.phase==="round"?G.green:
+                        shared.currentPhaseDetail==="betting"?G.purple:
+                        shared.currentPhaseDetail==="result"?G.yellow:G.gray1,
+                        borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,marginBottom:3,display:"inline-block"}}>
+                        {curSt?curSt.label:"대기중"}
+                      </div>
+                      {sRem!==null&&(
+                        <div style={{fontSize:14,fontWeight:800,color:sRem<=30?G.red:sRem<=60?G.orange:G.black,fontFamily:"monospace"}}>
+                          ⏱ {secToStr(sRem)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 시장 탭 내용 */}
+                <div style={{padding:"0 0 12px"}}>
+                  {/* 베팅 패널 */}
+                  {pvIsBetting&&(
+                    <div style={{background:G.bg,margin:"10px 14px",borderRadius:12,padding:"12px 14px"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:4}}>
+                        🎲 {shared.phase==="ready"?"1라운드 예측 베팅":`${(shared.round||0)+1}라운드 예측 베팅`}
+                      </div>
+                      <div style={{fontSize:11,color:G.gray1,marginBottom:8}}>종목별 상승/하락 예측</div>
+                      {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
+                        const nextR=shared.phase==="ready"?1:(shared.round||0)+1;
+                        const oddsInfo=shared.betOdds?.[st.id];
+                        const upOdds=+(oddsInfo?.upOdds??shared.baseOdds??1.8);
+                        const downOdds=+(oddsInfo?.downOdds??shared.baseOdds??1.8);
+                        const myBet=shared.bets?.[nextR]?.[pvId]?.[st.id];
+                        return(
+                          <div key={st.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${G.border}`}}>
+                            <div style={{fontSize:12,fontWeight:600,color:G.black}}>{st.emoji} {st.name}</div>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:11,color:G.red}}>▲ x{upOdds.toFixed(1)}</span>
+                              <span style={{fontSize:11,color:G.blue}}>▼ x{downOdds.toFixed(1)}</span>
+                              {myBet&&<span style={{fontSize:11,fontWeight:700,color:myBet.direction==="up"?G.red:G.blue,background:myBet.direction==="up"?G.redLight:G.blueLight,borderRadius:20,padding:"2px 8px"}}>
+                                {myBet.direction==="up"?"▲":"▼"} {fmt(myBet.amount)}
+                              </span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {betRem2!==null&&<div style={{fontSize:12,fontWeight:700,color:G.red,marginTop:8,textAlign:"right"}}>🎯 베팅 마감 {secToStr(betRem2)}</div>}
+                    </div>
+                  )}
+
+                  {/* 결과 배너 */}
+                  {shared.currentPhaseDetail==="result"&&(
+                    <div style={{background:G.yellowLight,margin:"10px 14px",borderRadius:12,padding:"12px 14px",border:`1.5px solid ${G.yellow}`}}>
+                      <div style={{fontSize:12,fontWeight:700,color:G.yellow,marginBottom:6}}>📊 R{shared.round} 종가 확인</div>
+                      {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
+                        const closePrice=st.prices[Math.min((shared.round||1)-1,st.prices.length-1)];
+                        const prevPrice=shared.round>1?st.prices[Math.min((shared.round||1)-2,st.prices.length-1)]:st.prices[0];
+                        const d=closePrice&&prevPrice?((closePrice-prevPrice)/prevPrice*100).toFixed(2):null;
+                        return(
+                          <div key={st.id} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`1px solid ${G.border}`}}>
+                            <span style={{fontSize:11,fontWeight:600,color:G.black}}>{st.emoji} {st.name}</span>
+                            <div>
+                              <span style={{fontSize:12,fontWeight:700}}>{closePrice?fmtN(closePrice):"?"}</span>
+                              {d!==null&&<span style={{fontSize:10,marginLeft:5,color:parseFloat(d)>0?G.red:parseFloat(d)<0?G.blue:G.gray1}}>{parseFloat(d)>0?"+":""}{d}%</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {shared.resultHint&&<div style={{marginTop:6,fontSize:11,color:G.gray1}}>💡 {shared.resultHint}</div>}
+                    </div>
+                  )}
+
+                  {/* 종목 목록 */}
+                  <div style={{padding:"8px 14px 4px",fontSize:11,color:G.gray1,fontWeight:500}}>
+                    종목 현황 {shared.phase==="round"?`· Round ${shared.round}`:""}
+                    {isBlind&&<span style={{color:G.purple,marginLeft:4}}>🙈</span>}
+                  </div>
+                  {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
+                    const cur=isBlind?null:getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots);
+                    const prev=round<=1?st.prices[0]:st.prices[Math.min(round-2,st.prices.length-1)];
+                    const p=isBlind?0:pctOf(cur,prev),isUp=p>0;
+                    const h=pvHoldings[st.id];
+                    return(
+                      <div key={st.id} style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:`1px solid ${G.border}`,gap:10}}>
+                        <div style={{width:36,height:36,borderRadius:10,background:G.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{st.emoji}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:700,color:G.black}}>{st.name}</div>
+                          <div style={{fontSize:10,color:G.gray2}}>{st.code}</div>
+                          {h?.qty>0&&<div style={{fontSize:10,color:G.purple,fontWeight:600}}>{h.qty}주 보유 · 평단 {fmtN(h.avgPrice)}</div>}
+                        </div>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          {isBlind
+                            ?<div style={{fontSize:13,fontWeight:700,color:G.purple}}>???</div>
+                            :<><div style={{fontSize:13,fontWeight:700,color:G.black}}>{fmtN(cur)}</div>
+                              <div style={{fontSize:10,fontWeight:600,padding:"1px 6px",borderRadius:4,marginTop:1,
+                                background:isUp?G.redLight:p<0?G.blueLight:G.bg,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"+":""}{p.toFixed(2)}%</div>
+                            </>
+                          }
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {teamList.length===0&&<div style={{textAlign:"center",color:G.gray2,padding:"40px 0",fontSize:13}}>등록된 팀이 없습니다</div>}
+          </>);
+        })()}
+
       </div>
       <Toast {...toast}/>
     </div>
