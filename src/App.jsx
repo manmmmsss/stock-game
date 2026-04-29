@@ -2909,6 +2909,19 @@ function AdminApp(){
             credentials↔teams 동기화 · 활동 없는 고아 계좌 제거
           </div>
 
+          {/* 전체 초기화 */}
+          <Btn onClick={()=>{
+            if(!window.confirm("⚠️ 등록된 팀원, 계좌, 그룹 데이터를 전부 삭제합니다.\n정말 진행하시겠습니까?")) return;
+            setShared(s=>({...s, teamCredentials:{}, teams:{}, groups:{}}));
+            t2("전체 계좌 삭제 완료");
+          }} color={G.red}
+            style={{width:"100%",padding:"12px",fontSize:13,marginBottom:6}}>
+            🗑 전체 팀/계좌 삭제
+          </Btn>
+          <div style={{fontSize:11,color:G.gray1,marginBottom:10,textAlign:"center"}}>
+            팀원 로그인 정보, 계좌, 그룹 데이터 모두 삭제
+          </div>
+
           {/* 시드 불균형 보정 */}
           <Btn onClick={applySeedBalancing} color={G.green}
             style={{width:"100%",padding:"12px",fontSize:13,marginBottom:10}}>
