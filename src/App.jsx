@@ -737,16 +737,23 @@ const INIT_SS={
 /* ══════════════════════════════════════════
    실시간 주가 계산 (선형보간 + 노이즈)
 ══════════════════════════════════════════ */
+const getInitialPrice = (stock) => stock?.initialPrice ?? stock?.prices?.[0] ?? 0;
+const getRoundClosePrice = (stock, round) => {
+  if (!stock) return 0;
+  const ri = Math.min(Math.max(round - 1, 0), stock.prices.length - 1);
+  return stock.prices[ri] ?? getInitialPrice(stock);
+};
+const getRoundStartPrice = (stock, round) => {
+  if (!stock) return 0;
+  return round <= 1 ? getInitialPrice(stock) : getRoundClosePrice(stock, round - 1);
+};
+
 function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots) {
-  if (!stock || round < 1) return stock?.prices?.[0] ?? 0;
+  if (!stock || round < 1) return getInitialPrice(stock);
   const ri = Math.min(round - 1, stock.prices.length - 1);
   const mod = modifiedTargets?.[stock.id];
   const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
-  const prev = ri > 0
-    ? stock.prices[ri - 1]
-    : Math.round(stock.prices[0] * (1 - (stock.prices[1] !== undefined
-        ? (stock.prices[1] - stock.prices[0]) / stock.prices[0] * 0.5
-        : 0.03)));
+  const prev = getRoundStartPrice(stock, round);
 
   // 이벤트 스냅샷: 발동 시점 가격 → 새 목표가로 수렴
   const snap = eventSnapshots?.[stock.id];
@@ -1044,7 +1051,7 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
 
   // 라운드 진행 중이 아닐 때 — 심플한 종가 표시
   if (!roundStartedAt || !roundEndsAt) {
-    const displayPrice = ri > 0 ? stock.prices[ri - 1] : stock.prices[0];
+    const displayPrice = getRoundStartPrice(stock, round);
     return (
       <div ref={containerRef} style={{ padding: "20px 0", textAlign: "center",
         background: G.bg, borderRadius: 12 }}>
@@ -1065,11 +1072,7 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
       </div>
     );
   }
-  const startPrice = ri > 0
-    ? stock.prices[ri - 1]
-    : Math.round(stock.prices[0] * (1 - (stock.prices[1] !== undefined
-        ? (stock.prices[1] - stock.prices[0]) / stock.prices[0] * 0.5
-        : 0.03)));
+  const startPrice = getRoundStartPrice(stock, round);
   const target = modifiedTargets?.[stock.id]?.round === round
     ? modifiedTargets[stock.id].modifiedPrice : stock.prices[ri];
 
@@ -1336,11 +1339,7 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
   if (!stock || stock.prices.length < 1) return <div style={{ width: 52, height: 28 }} />;
 
   const ri = Math.min(round - 1, stock.prices.length - 1);
-  const startPrice = ri > 0
-    ? stock.prices[ri - 1]
-    : Math.round(stock.prices[0] * (1 - (stock.prices[1] !== undefined
-        ? (stock.prices[1] - stock.prices[0]) / stock.prices[0] * 0.5
-        : 0.03)));
+  const startPrice = getRoundStartPrice(stock, round);
 
   const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots);
 
@@ -1940,9 +1939,8 @@ function AdminApp(){
             if(!bet||bet.settled){settledTeamBets[sid]=bet;continue;}
             const stock=s.stocks?.find(x=>x.id===sid);
             if(!stock){settledTeamBets[sid]=bet;continue;}
-            const ri=Math.min(r-1,stock.prices.length-1);
-            const startP=ri>0?stock.prices[ri-1]:stock.prices[0];
-            const endP=stock.prices[ri];
+            const startP=getRoundStartPrice(stock, r);
+            const endP=getRoundClosePrice(stock, r);
             const actualDir=endP>startP?"up":endP<startP?"down":"draw";
             const success=actualDir===bet.direction&&actualDir!=="draw";
             const betPayout=success?Math.round(bet.amount*(bet.odds||s.baseOdds||1.8)):0;
@@ -3341,7 +3339,7 @@ function AdminApp(){
                       <div style={{fontSize:12,fontWeight:700,color:G.yellow,marginBottom:6}}>📊 R{shared.round} 종가 확인</div>
                       {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
                         const closePrice=st.prices[Math.min((shared.round||1)-1,st.prices.length-1)];
-                        const prevPrice=shared.round>1?st.prices[Math.min((shared.round||1)-2,st.prices.length-1)]:st.prices[0];
+                        const prevPrice=getRoundStartPrice(st, shared.round || 1);
                         const d=closePrice&&prevPrice?((closePrice-prevPrice)/prevPrice*100).toFixed(2):null;
                         return(
                           <div key={st.id} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`1px solid ${G.border}`}}>
@@ -3364,7 +3362,7 @@ function AdminApp(){
                   </div>
                   {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
                     const cur=isBlind?null:getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots);
-                    const prev=round<=1?st.prices[0]:st.prices[Math.min(round-2,st.prices.length-1)];
+                    const prev=getRoundStartPrice(st, round);
                     const p=isBlind?0:pctOf(cur,prev),isUp=p>0;
                     const h=pvHoldings[st.id];
                     return(
@@ -3475,9 +3473,8 @@ function UserApp(){
           if(!bet) continue;
           const stock=shared.stocks?.find(s=>s.id===stockId);
           if(!stock) continue;
-          const ri=Math.min(shared.round-1,stock.prices.length-1);
-          const startP=ri>0?stock.prices[ri-1]:stock.prices[0];
-          const endP=stock.prices[ri];
+          const startP=getRoundStartPrice(stock, shared.round);
+          const endP=getRoundClosePrice(stock, shared.round);
           const actualDir=endP>startP?"up":endP<startP?"down":"draw";
           const success=actualDir===bet.direction&&actualDir!=="draw";
           const odds=bet.odds||shared.betOdds?.[stockId]?.[bet.direction==="up"?"upOdds":"downOdds"]||1.8;
@@ -4003,11 +4000,11 @@ function UserApp(){
     // 대기 중이거나 블라인드면 이전 라운드 종가 표시
     const ri2 = Math.min(round - 1, st.prices.length - 1);
     const displayPrice = isBlind
-      ? st.prices[Math.max(ri2 - 1, 0)]
+      ? getRoundStartPrice(st, round)
       : shared.phase !== "round"
-        ? (ri2 > 0 ? st.prices[ri2 - 1] : st.prices[0])
+        ? getRoundStartPrice(st, round)
         : cur;
-    const prev=round<=1?st.prices[0]:st.prices[Math.min(round-2,st.prices.length-1)];
+    const prev=getRoundStartPrice(st, round);
     const p=isBlind?0:pctOf(cur,prev),isUp=p>0;
     const h=holdings[st.id];
     const holding=h?.qty||0,avgPrice=h?.avgPrice||0;
@@ -4364,7 +4361,7 @@ function UserApp(){
               <div style={{fontSize:13,fontWeight:700,color:G.yellow,marginBottom:6}}>📊 R{shared.round} 종가 확인</div>
               {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
                 const closePrice=st.prices[Math.min((shared.round||1)-1,st.prices.length-1)];
-                const prevPrice=shared.round>1?st.prices[Math.min((shared.round||1)-2,st.prices.length-1)]:st.prices[0];
+                const prevPrice=getRoundStartPrice(st, shared.round || 1);
                 const diff=closePrice&&prevPrice?((closePrice-prevPrice)/prevPrice*100).toFixed(2):null;
                 return(
                   <div key={st.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${G.border}`}}>
@@ -4390,7 +4387,7 @@ function UserApp(){
           </div>
           {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
             const cur=isBlind?null:getLivePrice(st);
-            const prev=round<=1?st.prices[0]:st.prices[Math.min(round-2,st.prices.length-1)];
+            const prev=getRoundStartPrice(st, round);
             const p=isBlind?0:pctOf(cur,prev),isUp=p>0;
             return(
               <div key={st.id} onClick={()=>{setDetailSafe(st);setOrderSide("buy");setQty(1);setLeverage(1);setScreen("detail");}}
