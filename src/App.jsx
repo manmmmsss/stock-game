@@ -2095,7 +2095,7 @@ function AdminApp(){
   const phaseLabel=shared.phase==="ready"?"대기중":shared.phase==="round"?`R${shared.round} 진행중`:shared.phase==="break"?`R${shared.round} 종료`:"게임종료";
   const phaseBg=shared.phase==="round"?G.greenLight:shared.phase==="break"?G.yellowLight:shared.phase==="ended"?G.redLight:G.gray4;
   const phaseColor=shared.phase==="round"?G.green:shared.phase==="break"?G.yellow:shared.phase==="ended"?G.red:G.gray1;
-  const TABS=[["control","진행"],["settings","설정"],["teams","팀"],["accounts","계좌"],["rank","순위"],["preview","👁 미리보기"]];
+  const TABS=[["control","진행"],["settings","설정"],["teams","팀"],["accounts","계좌"],["rank","순위"],["preview","👁미리"]];
 
   const allTemplates=[...BUILT_IN_TEMPLATES,...(shared.customTemplates||[])];
 
@@ -2110,8 +2110,8 @@ function AdminApp(){
         {shared.activeEvent&&<div style={{marginBottom:6}}><EventBanner event={shared.activeEvent}/></div>}
         <div style={{display:"flex",overflowX:"auto"}}>
           {TABS.map(([key,label])=>(
-            <div key={key} onClick={()=>setTab(key)} style={{flexShrink:0,textAlign:"center",padding:"8px 14px",fontSize:12,fontWeight:600,
-              color:tab===key?G.blue:G.gray1,borderBottom:`2px solid ${tab===key?G.blue:"transparent"}`,cursor:"pointer",transition:"all .15s"}}>{label}</div>
+            <div key={key} onClick={()=>setTab(key)} style={{flex:1,textAlign:"center",padding:"8px 6px",fontSize:11,fontWeight:600,
+              color:tab===key?G.blue:G.gray1,borderBottom:`2px solid ${tab===key?G.blue:"transparent"}`,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}>{label}</div>
           ))}
         </div>
       </div>
