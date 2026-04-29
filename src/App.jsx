@@ -605,6 +605,24 @@ const BUILT_IN_TEMPLATES = [
   },
 ];
 
+// 템플릿 설정에서 timelineSteps 자동 생성
+const buildTimelineSteps = (tpl) => {
+  const rounds = tpl.rounds || [];
+  const betEnabled = tpl.betEnabled ?? false;
+  const betDuration = tpl.betDuration ?? 180;
+  const steps = [];
+  rounds.forEach((r, i) => {
+    const roundNum = i + 1;
+    const isLast = i === rounds.length - 1;
+    if (betEnabled) {
+      steps.push({ id:`bet${roundNum}`, label:`${roundNum}라운드 베팅`, type:"betting", duration:betDuration, round:roundNum });
+    }
+    steps.push({ id:`round${roundNum}`, label:`${roundNum}라운드 매매`, type:"round", duration:(r.durationMin||5)*60, round:roundNum });
+    steps.push({ id:`result${roundNum}`, label:isLast?"최종 결과":`${roundNum}라운드 종가`, type:"result", duration:isLast?300:60, round:roundNum });
+  });
+  return steps;
+};
+
 const DEFAULT_EVENT_AUTO={autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:3,probability:50,duration:60,affectTarget:true};
 const makeEventPresets=()=>[
   {id:uid(),name:"코로나 팬데믹",emoji:"🦠",desc:"전 세계 봉쇄령 발동",globalEffect:-15,stockEffects:{},note:"항공·소비재 급락",...DEFAULT_EVENT_AUTO},
@@ -1620,7 +1638,7 @@ function AdminApp(){
       leverageMax: tpl.leverageMax ?? 2,
       timelineSteps: tpl.timelineSteps
         ? tpl.timelineSteps.map(x=>({...x}))
-        : INIT_SS.timelineSteps,
+        : buildTimelineSteps(tpl),
       betEnabled: tpl.betEnabled ?? false,
       baseOdds: tpl.betBaseOdds ?? 1.8,
       dynamicOdds: tpl.betDynamic ?? false,
