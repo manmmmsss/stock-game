@@ -1766,6 +1766,54 @@ function AdminApp(){
     });
   };
 
+  const syncTeamsAndCredentials=()=>{
+    setShared(s=>{
+      const creds=s.teamCredentials||{};
+      const teams={...(s.teams||{})};
+      const groups={...(s.groups||{})};
+      let fixed=0;
+
+      // 1. credentials에 있지만 teams에 계좌 없는 경우 → 계좌 생성
+      Object.entries(creds).forEach(([name,{id,groupName}])=>{
+        if(!teams[id]){
+          teams[id]={name,groupName:groupName||"미분류",
+            cash:s.initCash||DEFAULT_INIT_CASH,
+            holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0};
+          const g=groupName||"미분류";
+          if(!groups[g]) groups[g]={diamonds:0,memberIds:[]};
+          if(!(groups[g].memberIds||[]).includes(id)){
+            groups[g]={...groups[g],memberIds:[...(groups[g].memberIds||[]),id]};
+          }
+          fixed++;
+        }
+      });
+
+      // 2. teams에 있지만 credentials에 없는 경우 → 활동 없으면 삭제, 있으면 유지
+      const credIds=new Set(Object.values(creds).map(v=>v.id));
+      Object.entries(teams).forEach(([id,tm])=>{
+        if(credIds.has(id)) return;
+        const hasActivity=
+          (Object.keys(tm.holdings||{}).filter(k=>k!=='_empty').length>0)||
+          ((tm.history||[]).filter(h=>h!=='_empty').length>0)||
+          (tm.borrowed>0)||
+          (Math.abs((tm.cash||0)-(s.initCash||DEFAULT_INIT_CASH))>1);
+        if(!hasActivity){
+          delete teams[id];
+          // groups에서도 제거
+          Object.keys(groups).forEach(g=>{
+            if((groups[g].memberIds||[]).includes(id)){
+              groups[g]={...groups[g],memberIds:groups[g].memberIds.filter(mid=>mid!==id)};
+            }
+          });
+          fixed++;
+        }
+      });
+
+      return{...s,teams,groups};
+    });
+    t2("팀-계좌 보정 완료");
+  };
+
   const giveGroupPoints=()=>{
     const amount=parseInt(groupPointInput)||0;
     if(!amount){t2("다이아를 입력하세요");return;}
@@ -2852,6 +2900,15 @@ function AdminApp(){
 
         {/* ══ 팀 관리 탭 ══ */}
         {tab==="teams"&&<>
+          {/* 팀-계좌 보정 */}
+          <Btn onClick={syncTeamsAndCredentials} color={G.orange}
+            style={{width:"100%",padding:"12px",fontSize:13,marginBottom:6}}>
+            🔧 팀-계좌 불일치 보정
+          </Btn>
+          <div style={{fontSize:11,color:G.gray1,marginBottom:10,textAlign:"center"}}>
+            credentials↔teams 동기화 · 활동 없는 고아 계좌 제거
+          </div>
+
           {/* 시드 불균형 보정 */}
           <Btn onClick={applySeedBalancing} color={G.green}
             style={{width:"100%",padding:"12px",fontSize:13,marginBottom:10}}>
