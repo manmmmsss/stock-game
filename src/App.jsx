@@ -2920,61 +2920,78 @@ function AdminApp(){
           </div>
 
           {/* 조별 팀원 목록 */}
-          <div style={{background:G.white,borderRadius:14,padding:14}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:12}}>
-              등록된 팀원 ({Object.keys(shared.teamCredentials||{}).length}명)
-            </div>
-            {Object.keys(shared.teamCredentials||{}).length===0
-              ?<div style={{textAlign:"center",color:G.gray2,padding:"24px 0",fontSize:13}}>등록된 팀원 없음</div>
-              :Array.from({length:16},(_,i)=>`${i+1}조`).map(group=>{
-                const members=Object.entries(shared.teamCredentials||{})
-                  .filter(([,v])=>v.groupName===group);
-                if(members.length===0) return null;
-                const r=Math.max(shared.round,1);
-                const groupAsset=members.reduce((sum,[,{id}])=>{
-                  const tm=shared.teams?.[id];
-                  if(!tm) return sum;
-                  const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
-                    if(sid==='_empty') return acc;
-                    const st=shared.stocks?.find(x=>x.id===sid);
-                    return acc+(st?st.prices[Math.min(r-1,st.prices.length-1)]*(h.qty||0):0);
-                  },0);
-                  return sum+(tm.cash||0)+sv;
-                },0);
-                const groupPoints=shared.groups?.[group]?.diamonds||0;
-                return(
-                  <div key={group} style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <div style={{fontSize:13,fontWeight:700,color:G.black}}>{group} ({members.length}명)</div>
-                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        {groupPoints>0&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {groupPoints}</div>}
-                        <div style={{fontSize:11,color:G.gray1}}>합산 {fmt(groupAsset)}</div>
-                      </div>
-                    </div>
-                    {members.map(([name,{id,pw}])=>{
+          {(()=>{
+            // teamCredentials + teams 양쪽 합산
+            const credIds=new Set(Object.values(shared.teamCredentials||{}).map(v=>v.id));
+            const orphans=Object.entries(shared.teams||{})
+              .filter(([id,tm])=>!credIds.has(id)&&tm.name)
+              .map(([id,tm])=>[tm.name,{id,pw:null,groupName:tm.groupName||"미분류"}]);
+            const allMembers=[...Object.entries(shared.teamCredentials||{}),...orphans];
+            const totalCount=allMembers.length;
+            const r=Math.max(shared.round,1);
+            const groups=[...new Set(allMembers.map(([,v])=>v.groupName))].sort();
+            return(
+              <div style={{background:G.white,borderRadius:14,padding:14}}>
+                <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:12}}>
+                  등록된 팀원 ({totalCount}명)
+                  {orphans.length>0&&<span style={{fontSize:11,color:G.orange,marginLeft:6}}>⚠ 계좌만 있는 팀 {orphans.length}명</span>}
+                </div>
+                {totalCount===0
+                  ?<div style={{textAlign:"center",color:G.gray2,padding:"24px 0",fontSize:13}}>등록된 팀원 없음</div>
+                  :groups.map(group=>{
+                    const members=allMembers.filter(([,v])=>v.groupName===group);
+                    if(members.length===0) return null;
+                    const groupAsset=members.reduce((sum,[,{id}])=>{
                       const tm=shared.teams?.[id];
-                      return(
-                        <div key={name} style={{display:"flex",justifyContent:"space-between",
-                          alignItems:"center",padding:"6px 10px",background:G.bg,
-                          borderRadius:8,marginBottom:4}}>
-                          <div>
-                            <div style={{fontSize:12,fontWeight:600,color:G.black}}>{name}</div>
-                            <div style={{fontSize:10,color:G.gray2,fontFamily:"monospace"}}>PW: {pw}</div>
-                          </div>
-                          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                            {tm&&<div style={{fontSize:11,color:G.gray1}}>{fmt(tm.cash||0)}</div>}
-                            <div onClick={()=>delMember(name,id,group)}
-                              style={{padding:"3px 8px",borderRadius:6,background:G.redLight,
-                                color:G.red,cursor:"pointer",fontSize:11,fontWeight:600}}>삭제</div>
+                      if(!tm) return sum;
+                      const sv=Object.entries(tm.holdings||{}).reduce((acc,[sid,h])=>{
+                        if(sid==='_empty') return acc;
+                        const st=shared.stocks?.find(x=>x.id===sid);
+                        return acc+(st?st.prices[Math.min(r-1,st.prices.length-1)]*(h.qty||0):0);
+                      },0);
+                      return sum+(tm.cash||0)+sv;
+                    },0);
+                    const groupPoints=shared.groups?.[group]?.diamonds||0;
+                    return(
+                      <div key={group} style={{marginBottom:12}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                          <div style={{fontSize:13,fontWeight:700,color:G.black}}>{group} ({members.length}명)</div>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            {groupPoints>0&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {groupPoints}</div>}
+                            <div style={{fontSize:11,color:G.gray1}}>합산 {fmt(groupAsset)}</div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                );
-              })
-            }
-          </div>
+                        {members.map(([name,{id,pw}])=>{
+                          const tm=shared.teams?.[id];
+                          const isOrphan=pw===null;
+                          return(
+                            <div key={name} style={{display:"flex",justifyContent:"space-between",
+                              alignItems:"center",padding:"6px 10px",
+                              background:isOrphan?G.yellowLight:G.bg,
+                              borderRadius:8,marginBottom:4,
+                              border:isOrphan?`1px solid ${G.yellow}`:"none"}}>
+                              <div>
+                                <div style={{fontSize:12,fontWeight:600,color:G.black}}>{name}</div>
+                                <div style={{fontSize:10,color:isOrphan?G.orange:G.gray2,fontFamily:"monospace"}}>
+                                  {isOrphan?"⚠ 비번 없음 (계좌만 존재)":"PW: "+pw}
+                                </div>
+                              </div>
+                              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                                {tm&&<div style={{fontSize:11,color:G.gray1}}>{fmt(tm.cash||0)}</div>}
+                                <div onClick={()=>delMember(name,id,group)}
+                                  style={{padding:"3px 8px",borderRadius:6,background:G.redLight,
+                                    color:G.red,cursor:"pointer",fontSize:11,fontWeight:600}}>삭제</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })
+                }
+              </div>
+            );
+          })()}
         </>}
 
         {/* ══ 계좌 조회 탭 ══ */}
