@@ -1590,7 +1590,7 @@ function BetResultPopup({ data, onClose }) {
 /* ══════════════════════════════════════════
    관리자 앱
 ══════════════════════════════════════════ */
-function AdminApp(){
+function AdminApp({onBack=null}){
   const shared=useShared();
   useAutoEventAndHistory(shared);
   const [tab,setTab]=useState("control");
@@ -2409,6 +2409,12 @@ function AdminApp(){
     <div style={{...WRAP,background:G.bg}}>
       <div style={{background:G.white,padding:"env(safe-area-inset-top, 14px) 16px 0",borderBottom:`1px solid ${G.border}`,position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          {onBack&&(
+            <div onClick={onBack} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",padding:"4px 8px",borderRadius:8,background:G.bg,flexShrink:0}}>
+              <span style={{fontSize:15}}>←</span>
+              <span style={{fontSize:11,fontWeight:600,color:G.gray1}}>나가기</span>
+            </div>
+          )}
           <div style={{background:G.black,color:G.white,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>ADMIN</div>
           <span style={{fontSize:16,fontWeight:800,color:G.black}}>운영자 패널</span>
           <div style={{marginLeft:"auto",background:phaseBg,color:phaseColor,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>{phaseLabel}</div>
@@ -3510,7 +3516,7 @@ function AdminApp(){
 /* ══════════════════════════════════════════
    사용자 앱
 ══════════════════════════════════════════ */
-function UserApp({previewAs=null}){
+function UserApp({previewAs=null,onBack=null}){
   const shared=useShared();
   const [screen,setScreen]=useState(previewAs?"main":"login");
   const [loginName,setLoginName]=useState("");
@@ -4003,7 +4009,13 @@ function UserApp({previewAs=null}){
   /* ── 로그인 ── */
   if(screen==="login") return(
     <div style={W.wrap}>
-      <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px",background:G.white}}>
+      <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px",background:G.white,position:"relative"}}>
+        {onBack&&!previewAs&&(
+          <div onClick={onBack} style={{position:"absolute",top:24,left:24,display:"flex",alignItems:"center",gap:6,cursor:"pointer",padding:"6px 10px",borderRadius:10,background:G.bg}}>
+            <span style={{fontSize:16}}>←</span>
+            <span style={{fontSize:13,fontWeight:600,color:G.gray1}}>뒤로</span>
+          </div>
+        )}
         <div style={{marginBottom:36}}>
           <div style={{fontSize:30,fontWeight:800,color:G.black,marginBottom:8,letterSpacing:-1}}>로(路) 주식 게임 🏦</div>
           <div style={{fontSize:15,color:G.gray1,lineHeight:1.7}}>운영자에게 받은 팀 정보로<br/>로그인하세요</div>
@@ -4377,7 +4389,15 @@ function UserApp({previewAs=null}){
         </div>}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
           <div>
-            <div style={{fontSize:12,color:G.gray1,marginBottom:1}}>{teamName}팀</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:1}}>
+              <div style={{fontSize:12,color:G.gray1}}>{teamName}팀</div>
+              {onBack&&!previewAs&&(
+                <div onClick={onBack} style={{display:"flex",alignItems:"center",gap:3,cursor:"pointer",padding:"2px 8px",borderRadius:8,background:G.bg,border:`1px solid ${G.border}`}}>
+                  <span style={{fontSize:12}}>←</span>
+                  <span style={{fontSize:10,fontWeight:600,color:G.gray2}}>나가기</span>
+                </div>
+              )}
+            </div>
             <div style={{fontSize:26,fontWeight:800,color:G.black,letterSpacing:-0.5}}>{fmt(total)}</div>
             <div style={{fontSize:13,fontWeight:600,color:diff>=0?G.red:G.blue,marginTop:1}}>
               {diff>=0?"▲ +":"▼ "}{fmt(Math.abs(diff))} ({diff>=0?"+":""}{diffPct}%)
@@ -4960,11 +4980,17 @@ function UserApp({previewAs=null}){
 /* ══════════════════════════════════════════
    관리자 로그인
 ══════════════════════════════════════════ */
-function AdminLogin({onSuccess}){
+function AdminLogin({onSuccess,onBack=null}){
   const [pw,setPw]=useState(""),[ err,setErr]=useState(false);
   const check=()=>{if(pw===ADMIN_PW)onSuccess();else setErr(true);};
   return(
-    <div style={{...WRAP,display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px"}}>
+    <div style={{...WRAP,display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 24px",position:"relative"}}>
+      {onBack&&(
+        <div onClick={onBack} style={{position:"absolute",top:24,left:24,display:"flex",alignItems:"center",gap:6,cursor:"pointer",padding:"6px 10px",borderRadius:10,background:G.bg}}>
+          <span style={{fontSize:16}}>←</span>
+          <span style={{fontSize:13,fontWeight:600,color:G.gray1}}>뒤로</span>
+        </div>
+      )}
       <div style={{fontSize:26,fontWeight:800,color:G.black,marginBottom:8}}>운영자 로그인 🔐</div>
       <div style={{fontSize:14,color:G.gray1,marginBottom:24}}>관리자 비밀번호를 입력하세요</div>
       <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} placeholder="비밀번호"
@@ -4982,8 +5008,8 @@ function AdminLogin({onSuccess}){
 export default function App(){
   const [mode,setMode]=useState("select");
   const [auth,setAuth]=useState(false);
-  if(mode==="admin"){if(!auth)return <AdminLogin onSuccess={()=>setAuth(true)}/>;return <AdminApp/>;};
-  if(mode==="user") return <UserApp/>;
+  if(mode==="admin"){if(!auth)return <AdminLogin onSuccess={()=>setAuth(true)} onBack={()=>setMode("select")}/>;return <AdminApp onBack={()=>{setMode("select");setAuth(false);}}/>;};
+  if(mode==="user") return <UserApp onBack={()=>setMode("select")}/>;
   return(
     <div style={{...WRAP,background:"linear-gradient(160deg,#0f172a 0%,#1e3a5f 55%,#0f172a 100%)",
       display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 28px"}}>
