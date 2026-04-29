@@ -3553,7 +3553,7 @@ function UserApp({previewAs=null,onBack=null}){
   const [tradePrice, setTradePrice] = useState(0);
   const [tradeTo, setTradeTo] = useState("전체공개");
 
-  const SESSION_TTL = 10 * 60 * 1000; // 10분
+  const SESSION_TTL = 15 * 60 * 1000; // 15분
 
   useEffect(() => {
     if (screen !== "login") return;
@@ -3690,9 +3690,9 @@ function UserApp({previewAs=null,onBack=null}){
 
   const doLogin=()=>{
     const name=loginName.trim(),pw=loginPw.trim();
-    if(!name||!pw){setLoginErr("팀 이름과 비밀번호를 입력해주세요");return;}
+    if(!name||!pw){setLoginErr("이름과 비밀번호를 입력해주세요");return;}
     const cred=shared.teamCredentials?.[name];
-    if(!cred){setLoginErr("등록되지 않은 팀 이름입니다");return;}
+    if(!cred){setLoginErr("등록되지 않은 이름입니다");return;}
     if(cred.pw!==pw){setLoginErr("비밀번호가 올바르지 않습니다");return;}
     try {
       localStorage.setItem('sg_session', JSON.stringify({ id: cred.id, name, ts: Date.now() }));
@@ -4021,8 +4021,8 @@ function UserApp({previewAs=null,onBack=null}){
           <div style={{fontSize:15,color:G.gray1,lineHeight:1.7}}>운영자에게 받은 팀 정보로<br/>로그인하세요</div>
         </div>
         <div style={{marginBottom:12}}>
-          <div style={{fontSize:13,fontWeight:600,color:G.gray1,marginBottom:6}}>팀 이름</div>
-          <input value={loginName} onChange={e=>{setLoginName(e.target.value);setLoginErr("");}} placeholder="예) 드림팀"
+          <div style={{fontSize:13,fontWeight:600,color:G.gray1,marginBottom:6}}>이름</div>
+          <input value={loginName} onChange={e=>{setLoginName(e.target.value);setLoginErr("");}} placeholder="운영자에게 받은 이름"
             onKeyDown={e=>e.key==="Enter"&&doLogin()}
             style={{width:"100%",border:`1.5px solid ${loginErr?G.red:G.border}`,borderRadius:12,padding:"14px 16px",fontSize:15,fontFamily:"inherit",outline:"none",color:G.black,boxSizing:"border-box"}}/>
         </div>
@@ -5005,10 +5005,35 @@ function AdminLogin({onSuccess,onBack=null}){
 /* ══════════════════════════════════════════
    진입점
 ══════════════════════════════════════════ */
+const ADMIN_SESSION_TTL = 15 * 60 * 1000; // 15분
+const ADMIN_SESSION_KEY = 'sg_admin_session';
+
 export default function App(){
-  const [mode,setMode]=useState("select");
-  const [auth,setAuth]=useState(false);
-  if(mode==="admin"){if(!auth)return <AdminLogin onSuccess={()=>setAuth(true)} onBack={()=>setMode("select")}/>;return <AdminApp onBack={()=>{setMode("select");setAuth(false);}}/>;};
+  const [mode,setMode]=useState(()=>{
+    try {
+      const s=localStorage.getItem(ADMIN_SESSION_KEY);
+      if(s){const {ts}=JSON.parse(s);if(Date.now()-ts<ADMIN_SESSION_TTL) return "admin";}
+    } catch(e){}
+    return "select";
+  });
+  const [auth,setAuth]=useState(()=>{
+    try {
+      const s=localStorage.getItem(ADMIN_SESSION_KEY);
+      if(s){const {ts}=JSON.parse(s);if(Date.now()-ts<ADMIN_SESSION_TTL) return true;}
+    } catch(e){}
+    return false;
+  });
+
+  const handleAdminLogin=()=>{
+    try{localStorage.setItem(ADMIN_SESSION_KEY,JSON.stringify({ts:Date.now()}));}catch(e){}
+    setAuth(true);
+  };
+  const handleAdminBack=()=>{
+    try{localStorage.removeItem(ADMIN_SESSION_KEY);}catch(e){}
+    setMode("select");setAuth(false);
+  };
+
+  if(mode==="admin"){if(!auth)return <AdminLogin onSuccess={()=>{handleAdminLogin();setMode("admin");}} onBack={()=>setMode("select")}/>;return <AdminApp onBack={handleAdminBack}/>;};
   if(mode==="user") return <UserApp onBack={()=>setMode("select")}/>;
   return(
     <div style={{...WRAP,background:"linear-gradient(160deg,#0f172a 0%,#1e3a5f 55%,#0f172a 100%)",
@@ -5035,7 +5060,7 @@ export default function App(){
           onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
           <div>
             <div style={{fontSize:18,marginBottom:4}}>🎮 주식게임 참여</div>
-            <div style={{fontSize:12,fontWeight:400,color:G.gray1}}>팀 이름·비밀번호로 입장</div>
+            <div style={{fontSize:12,fontWeight:400,color:G.gray1}}>이름·비밀번호로 입장</div>
           </div>
           <div style={{width:36,height:36,borderRadius:12,background:G.blue,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <span style={{color:"#fff",fontSize:18,lineHeight:1}}>→</span>
