@@ -2110,10 +2110,14 @@ function AdminApp(){
                 timelineIndex: -1,
                 timelineEndsAt: 0,
               }));
-              t2("43분 자동 진행 시작!");
+              const _totalMin = Math.round((shared.timelineSteps || INIT_SS.timelineSteps).reduce((s, st) => s + st.duration, 0) / 60);
+              t2(`${_totalMin}분 자동 진행 시작!`);
             }} color={G.green}
               style={{width:"100%",padding:"14px",fontSize:15,marginBottom:8}}>
-              ▶ 게임 자동 시작 (43분)
+              {(() => {
+                const _totalMin = Math.round((shared.timelineSteps || INIT_SS.timelineSteps).reduce((s, st) => s + st.duration, 0) / 60);
+                return `▶ 게임 자동 시작 (${_totalMin}분)`;
+              })()}
             </Btn>
           ) : (
             <div style={{background:G.greenLight,borderRadius:14,padding:14,marginBottom:10}}>
