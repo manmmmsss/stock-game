@@ -3420,6 +3420,15 @@ function AdminApp({onBack=null}){
                           </div>
                         </div>
                       )}
+                      {/* 차입금 강제 초기화 */}
+                      <div style={{marginBottom:8,background:G.orangeLight,borderRadius:10,padding:"10px 12px"}}>
+                        <div style={{fontSize:11,fontWeight:700,color:G.orange,marginBottom:6}}>⚡ 차입금 강제 초기화</div>
+                        <div style={{fontSize:11,color:G.gray1,marginBottom:6}}>현재 차입금: {fmt(shared.teams?.[id]?.borrowed||0)}</div>
+                        <Btn onClick={()=>{
+                          setShared(s=>({...s,teams:{...s.teams,[id]:{...s.teams[id],borrowed:0}}}));
+                          t2("차입금 초기화됨");
+                        }} color={G.orange} textColor={G.white} style={{width:"100%",padding:"7px",fontSize:12}}>차입금 0으로 초기화</Btn>
+                      </div>
                       {/* 보너스 지급 */}
                       <div style={{marginTop:10,background:G.yellowLight,borderRadius:10,padding:"10px 12px"}}>
                         <div style={{fontSize:11,fontWeight:700,color:G.yellow,marginBottom:7}}>💰 보너스 지급</div>
@@ -3795,14 +3804,23 @@ function UserApp({previewAs=null,onBack=null}){
       const h=holdings[s.id];
       if(!h||h.qty<effectiveQty){t2("보유 수량 부족");setConfirm(false);return;}
       const proceeds=cost-feeAmt;
+      // 매도 시 차입금 비례 상환
+      // 보유 수량 대비 매도 수량 비율만큼 차입금 상환
       await updTeam(t=>{
-        const repay=Math.min(t.borrowed||0,cost*((leverage-1)/leverage)||0);
-        const newQty=(t.holdings?.[s.id]?.qty||0)-effectiveQty;
+        const currentHolding=t.holdings?.[s.id]||{qty:0,avgPrice:0};
+        const totalQty=currentHolding.qty||0;
+        const repayRatio=totalQty>0?effectiveQty/totalQty:0;
+        const repay=Math.round((t.borrowed||0)*repayRatio);
+        const newQty=totalQty-effectiveQty;
         const rec={time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
           type:'sell',stockName:s.name,stockEmoji:s.emoji,qty:effectiveQty,price:cur,total:cost};
-        return{...t,cash:t.cash+proceeds-repay,borrowed:Math.max(0,(t.borrowed||0)-repay),
-          holdings:{...t.holdings,[s.id]:{...t.holdings?.[s.id],qty:newQty}},
-          history:[...(t.history||[]),rec]};
+        return{
+          ...t,
+          cash:t.cash+proceeds,
+          borrowed:Math.max(0,(t.borrowed||0)-repay),
+          holdings:{...t.holdings,[s.id]:{...currentHolding,qty:newQty}},
+          history:[...(t.history||[]),rec],
+        };
       });
       t2(`${s.name} ${effectiveQty}주 매도 완료`);
     }
@@ -4333,21 +4351,11 @@ function UserApp({previewAs=null,onBack=null}){
                   <input
                     type="number" value={qty} min={1} max={maxQty||1}
                     onFocus={e=>e.target.select()}
-                    onKeyDown={e=>{
-                      if(String(qty)==="1"&&e.key>="1"&&e.key<="9"){
-                        e.preventDefault();
-                        const v=parseInt(e.key)||1;
-                        setQty(Math.max(1,Math.min(v,maxQty||1)));
-                      }
-                      if((qty===0||qty===1)&&e.key>="0"&&e.key<="9"){
-                        e.preventDefault();
-                        const v=parseInt(e.key)||1;
-                        setQty(Math.max(1,Math.min(v,maxQty||1)));
-                      }
-                    }}
                     onChange={e=>{
-                      const v=parseInt(e.target.value)||1;
-                      setQty(Math.max(1,Math.min(v,maxQty||1)));
+                      const raw=e.target.value;
+                      if(raw===""){setQty("");return;}
+                      const v=parseInt(raw,10);
+                      if(!isNaN(v))setQty(Math.max(1,Math.min(v,maxQty||1)));
                     }}
                     style={{width:64,textAlign:"center",border:`1.5px solid ${G.border}`,borderRadius:10,
                       padding:"8px 4px",fontSize:17,fontWeight:700,fontFamily:"monospace",
@@ -4368,7 +4376,10 @@ function UserApp({previewAs=null,onBack=null}){
                 <span style={{fontSize:12,color:G.gray1}}>-{fmt(feeAmt)}</span>
               </div>
               <div style={{fontSize:12,color:G.gray2,textAlign:"right",marginBottom:14}}>
-                {orderSide==="buy"?`잔액 ${fmt(cash)}`:` 보유 ${holding}주`}
+                {orderSide==="buy"
+                  ?<>잔액 {fmt(cash)} · <span style={{color:G.red,fontWeight:700}}>최대 {maxQty}주 구매 가능</span></>
+                  :<>보유 {holding}주 · <span style={{color:G.blue,fontWeight:700}}>최대 {maxQty}주 판매 가능</span></>
+                }
               </div>
               <Btn
                 onClick={()=>{
