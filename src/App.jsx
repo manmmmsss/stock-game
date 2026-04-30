@@ -848,8 +848,17 @@ const applyScheduledDelistings = (state, round, phase = "roundStart") => {
   };
 };
 
-function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots) {
+function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots, phase) {
   if (!stock || round < 1) return getInitialPrice(stock);
+  // 라운드 진행 중이 아니면 확정 목표가 반환
+  if (phase === "break" || phase === "ended") {
+    const ri2 = Math.min(round - 1, stock.prices.length - 1);
+    const mod2 = modifiedTargets?.[stock.id];
+    return (mod2 && mod2.round === round)
+      ? mod2.modifiedPrice
+      : stock.prices[ri2] ?? stock.prices[0];
+  }
+  if (phase === "ready") return stock.prices[0];
   const ri = Math.min(round - 1, stock.prices.length - 1);
   const mod = modifiedTargets?.[stock.id];
   const target = (mod && mod.round === round) ? mod.modifiedPrice : stock.prices[ri];
@@ -882,7 +891,8 @@ function getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent,
   }
 
   const t = Math.min(Math.max(effectiveElapsed / effectiveTotal, 0), 1);
-  const noiseDecay = 1 - t;
+  // 마지막 20% 구간에서 노이즈를 급격히 0으로 수렴
+  const noiseDecay = t < 0.8 ? (1 - t) : (1 - t) * ((1 - t) / 0.2);
   const base = effectiveBase + (effectiveTarget - effectiveBase) * t;
 
   const sid = stock.id?.charCodeAt(0) || 1;
@@ -931,7 +941,7 @@ function useAutoEventAndHistory(shared) {
       (s.stocks || []).forEach(stock => {
         const price = getCurrentPrice(
           stock, s.round, s.roundStartedAt, s.roundEndsAt,
-          s.activeEvent, s.modifiedTargets, s.eventSnapshots
+          s.activeEvent, s.modifiedTargets, s.eventSnapshots, s.phase
         );
         const existing = Array.isArray(s.priceHistory?.[stock.id])
           ? s.priceHistory[stock.id] : [];
@@ -1118,7 +1128,7 @@ const TextInput=({value,onChange,placeholder,style:s,...p})=>(
 );
 
 /* ── 캔들스틱 차트 ── */
-function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, avgPrice, eventSnapshots }) {
+function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, avgPrice, eventSnapshots, phase }) {
   const [, tick] = useState(0);
   const containerRef = useRef(null);
   const [containerW, setContainerW] = useState(300);
@@ -1151,7 +1161,9 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
 
   // 라운드 진행 중이 아닐 때 — 심플한 종가 표시
   if (!roundStartedAt || !roundEndsAt) {
-    const displayPrice = getRoundStartPrice(stock, round);
+    const displayPrice = phase === "break"
+      ? (stock.prices[Math.min(round - 1, stock.prices.length - 1)] ?? stock.prices[0])
+      : stock.prices[0];
     return (
       <div ref={containerRef} style={{ padding: "20px 0", textAlign: "center",
         background: G.bg, borderRadius: 12 }}>
@@ -1177,7 +1189,7 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     ? modifiedTargets[stock.id].modifiedPrice : stock.prices[ri];
 
   // 현재 라운드 실시간 가격
-  const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots);
+  const curPrice = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots, phase);
 
   // getPriceAt — 현재 라운드 특정 시각 가격 (getCurrentPrice와 동일한 공식)
   const getPriceAt = (atTs) => {
@@ -1205,7 +1217,8 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     }
 
     const t = Math.min(Math.max(effectiveElapsed / effectiveTotal, 0), 1);
-    const noiseDecay = 1 - t;
+    // 마지막 20% 구간에서 노이즈를 급격히 0으로 수렴
+    const noiseDecay = t < 0.8 ? (1 - t) : (1 - t) * ((1 - t) / 0.2);
     const base = effectiveBase + (effectiveTarget - effectiveBase) * t;
 
     const sid = stock.id?.charCodeAt(0) || 1;
@@ -1428,7 +1441,7 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
 
 
 
-function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, eventSnapshots }) {
+function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, blind, modifiedTargets, eventSnapshots, phase }) {
   const [ts, setTs] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setTs(Date.now()), 3000);
@@ -1441,7 +1454,7 @@ function LiveMiniChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent,
   const ri = Math.min(round - 1, stock.prices.length - 1);
   const startPrice = getRoundStartPrice(stock, round);
 
-  const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots);
+  const cur = getCurrentPrice(stock, round, roundStartedAt, roundEndsAt, activeEvent, modifiedTargets, eventSnapshots, phase);
 
   const confirmedPts = stock.prices.slice(0, ri);
   const steps = 6;
@@ -2211,7 +2224,7 @@ function AdminApp({onBack=null}){
       const st=s.stocks?.find(x=>x.id===sid);
       if(!st) return s;
       const r=Math.max(s.round,1);
-      const price=getCurrentPrice(st,r,s.roundStartedAt,s.roundEndsAt,s.activeEvent,s.modifiedTargets,s.eventSnapshots);
+      const price=getCurrentPrice(st,r,s.roundStartedAt,s.roundEndsAt,s.activeEvent,s.modifiedTargets,s.eventSnapshots,s.phase);
       const teams={...s.teams};
       for(const [tid,tm] of Object.entries(teams)){
         const qty=tm.holdings?.[sid]?.qty||0;
@@ -2238,7 +2251,7 @@ function AdminApp({onBack=null}){
       const currentP=getCurrentPrice(
         stock,shared.round,
         shared.roundStartedAt,shared.roundEndsAt,
-        null,shared.modifiedTargets,null
+        null,shared.modifiedTargets,null,shared.phase
       );
       snapshots[stock.id]={appliedAt:now,basePrice:currentP};
     });
@@ -3705,20 +3718,20 @@ function UserApp({previewAs=null,onBack=null}){
 
   const getLivePrice=useCallback(st=>{
     if(isBlind) return null;
-    return getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots);
-  },[round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,isBlind]);
+    return getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots,shared.phase);
+  },[round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,isBlind,shared.phase]);
 
   const totalAsset=useCallback(()=>{
     let t=cash;
     for(const [sid,h] of Object.entries(holdings)){
       const s=shared.stocks?.find(x=>x.id===sid);
       if(s&&h.qty>0){
-        const p=getCurrentPrice(s,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots);
+        const p=getCurrentPrice(s,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots,shared.phase);
         t+=p*h.qty;
       }
     }
     return t;
-  },[cash,holdings,shared.stocks,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets]);
+  },[cash,holdings,shared.stocks,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.phase]);
 
   const doLogin=()=>{
     const name=loginName.trim(),pw=loginPw.trim();
@@ -4305,6 +4318,7 @@ function UserApp({previewAs=null,onBack=null}){
               modifiedTargets={shared.modifiedTargets}
               priceHistory={shared.priceHistory}
               eventSnapshots={shared.eventSnapshots}
+              phase={shared.phase}
               avgPrice={holdings[st.id]?.avgPrice || 0}/>
           </div>
           {holding>0&&(
@@ -4624,7 +4638,7 @@ function UserApp({previewAs=null,onBack=null}){
                   <div style={{fontSize:14,fontWeight:700,color:G.black,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.name}</div>
                   <div style={{fontSize:11,color:G.gray2}}>{st.code}</div>
                 </div>
-                <LiveMiniChart stock={st} round={round} roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt} activeEvent={shared.activeEvent} modifiedTargets={shared.modifiedTargets} eventSnapshots={shared.eventSnapshots} blind={isBlind}/>
+                <LiveMiniChart stock={st} round={round} roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt} activeEvent={shared.activeEvent} modifiedTargets={shared.modifiedTargets} eventSnapshots={shared.eventSnapshots} phase={shared.phase} blind={isBlind}/>
                 <div style={{textAlign:"right",flexShrink:0,minWidth:72}}>
                   {isBlind
                     ?<div style={{fontSize:14,fontWeight:700,color:G.purple}}>???</div>
@@ -4672,7 +4686,7 @@ function UserApp({previewAs=null,onBack=null}){
             ?<div style={{background:G.white,textAlign:"center",color:G.gray2,padding:"36px 0",fontSize:14}}>보유 종목 없음</div>
             :(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).map(st=>{
               const h=holdings[st.id];
-              const cur=getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots);
+              const cur=getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots,shared.phase);
               const ev2=cur*h.qty,pnl=ev2-h.avgPrice*h.qty;
               return(
                 <div key={st.id} onClick={()=>{setDetailSafe(st);setOrderSide("sell");setQty(1);setLeverage(1);setScreen("detail");}}
@@ -4882,7 +4896,7 @@ function UserApp({previewAs=null,onBack=null}){
                     <select value={tradeStock} onChange={e => {
                       setTradeStock(e.target.value);
                       const st = shared.stocks?.find(x => x.id === e.target.value);
-                      if (st) setTradePrice(getCurrentPrice(st, Math.max(shared.round, 1), shared.roundStartedAt, shared.roundEndsAt, shared.activeEvent, shared.modifiedTargets, shared.eventSnapshots));
+                      if (st) setTradePrice(getCurrentPrice(st, Math.max(shared.round, 1), shared.roundStartedAt, shared.roundEndsAt, shared.activeEvent, shared.modifiedTargets, shared.eventSnapshots, shared.phase));
                     }} style={{ width: "100%", border: `1.5px solid ${G.border}`, borderRadius: 8,
                       padding: "7px 10px", fontSize: 12, fontFamily: "inherit", outline: "none", background: G.white }}>
                       <option value="">선택...</option>
