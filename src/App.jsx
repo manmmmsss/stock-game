@@ -4426,19 +4426,26 @@ function UserApp({previewAs=null,onBack=null}){
         </div>}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",paddingTop:4,marginBottom:12}}>
           <div>
-            <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>
-              {teamName}
-              {onBack&&!previewAs&&<span onClick={onBack} style={{marginLeft:8,cursor:"pointer",color:G.gray2,borderBottom:`1px solid ${G.gray3}`}}>나가기</span>}
-            </div>
-            <div style={{fontSize:27,fontWeight:800,color:G.black,letterSpacing:-0.5,lineHeight:1.15}}>{fmt(total)}</div>
-            <div style={{fontSize:12,fontWeight:600,color:diff>=0?G.red:G.blue,marginTop:3}}>
-              {diff>=0?"▲ +":"▼ "}{fmt(Math.abs(diff))} ({diff>=0?"+":""}{diffPct}%)
-            </div>
             {(()=>{
               const mgn=shared.teamCredentials?.[teamName]?.groupName;
               const gp=shared.groups?.[mgn]?.diamonds||0;
-              return gp>0&&mgn?<div style={{fontSize:11,color:G.purple,fontWeight:600,marginTop:3}}>💎 {gp}</div>:null;
+              return(
+                <div style={{marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{fontSize:16,fontWeight:700,color:G.black}}>{teamName}</div>
+                    {onBack&&!previewAs&&<span onClick={onBack} style={{fontSize:11,cursor:"pointer",color:G.gray2,borderBottom:`1px solid ${G.gray3}`}}>나가기</span>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+                    {mgn&&<div style={{fontSize:13,color:G.gray1,fontWeight:500}}>{mgn}</div>}
+                    {gp>0&&<div style={{fontSize:12,color:G.purple,fontWeight:600}}>💎 {gp}</div>}
+                  </div>
+                </div>
+              );
             })()}
+            <div style={{fontSize:24,fontWeight:800,color:G.black,letterSpacing:-0.5,lineHeight:1.15}}>{fmt(total)}</div>
+            <div style={{fontSize:12,fontWeight:600,color:diff>=0?G.red:G.blue,marginTop:3}}>
+              {diff>=0?"▲ +":"▼ "}{fmt(Math.abs(diff))} ({diff>=0?"+":""}{diffPct}%)
+            </div>
           </div>
           <div style={{textAlign:"right",paddingTop:4}}>
             <div style={{
