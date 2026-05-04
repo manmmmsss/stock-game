@@ -1950,22 +1950,31 @@ function AdminApp({onBack=null}){
 
   // 팀 계정
   const addMember=()=>{
-    const name=newMemberName.trim(),group=newGroupName;
-    if(!name){t2("이름 입력");return;}
-    if(shared.teamCredentials?.[name]){t2("이미 있는 이름");return;}
-    const id=uid();
+    const group=newGroupName;
+    const names=newMemberName.split(/[\n,，]+/).map(s=>s.trim()).filter(Boolean);
+    if(names.length===0){t2("이름 입력");return;}
+    const duplicates=names.filter(n=>shared.teamCredentials?.[n]);
+    if(duplicates.length>0){t2(`이미 있는 이름: ${duplicates.join(", ")}`);return;}
+    const newCreds={},newTeams={},newIds=[];
+    names.forEach(name=>{
+      const id=uid();
+      newCreds[name]={id,groupName:group};
+      newTeams[id]={name,groupName:group,cash:0,
+        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0};
+      newIds.push(id);
+    });
     setShared(s=>({
       ...s,
-      teamCredentials:{...(s.teamCredentials||{}),[name]:{id,groupName:group}},
-      teams:{...s.teams,[id]:{name,groupName:group,cash:s.initCash||DEFAULT_INIT_CASH,
-        holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0}},
+      teamCredentials:{...(s.teamCredentials||{}),...newCreds},
+      teams:{...s.teams,...newTeams},
       groups:{...(s.groups||{}),[group]:{
+        ...(s.groups?.[group]||{}),
         diamonds:(s.groups?.[group]?.diamonds||0),
-        memberIds:[...(s.groups?.[group]?.memberIds||[]),id],
+        memberIds:[...(s.groups?.[group]?.memberIds||[]),...newIds],
       }},
     }));
-    setNewMemberName("");setNewMemberPw("");
-    t2(`${group} - ${name} 등록`);
+    setNewMemberName("");
+    t2(`${group} - ${names.length}명 등록 완료`);
   };
 
   const addBatch=()=>{
@@ -3242,11 +3251,13 @@ function AdminApp({onBack=null}){
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
-            <div style={{display:"flex",gap:6,marginBottom:10}}>
-              <TextInput value={newMemberName} onChange={e=>setNewMemberName(e.target.value)}
-                placeholder="팀원 이름 (예: 홍길동)" style={{flex:1}}/>
-              <Btn onClick={addMember} style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>등록</Btn>
-            </div>
+            <textarea value={newMemberName} onChange={e=>setNewMemberName(e.target.value)}
+              placeholder={"이름을 입력하세요\n여러 명은 줄바꿈 또는 쉼표로 구분\n예)\n홍길동\n김철수\n이영희"}
+              rows={5}
+              style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,
+                padding:"9px 10px",fontSize:13,fontFamily:"inherit",outline:"none",
+                color:G.black,boxSizing:"border-box",resize:"vertical",lineHeight:1.6,marginBottom:6}}/>
+            <Btn onClick={addMember} style={{width:"100%",padding:"9px",fontSize:13}}>등록</Btn>
           </div>
 
           {/* 일괄 등록 */}
