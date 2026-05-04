@@ -5103,24 +5103,24 @@ export default function App(){
   if(mode==="user") return <UserApp onBack={()=>setMode("select")}/>;
   return(
     <div style={{...WRAP,background:"#000",display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-      {/* 배경 이미지 (화면 꽉 채움, 불투명도 80%) */}
+      position:"relative",overflow:"hidden"}}>
+      {/* 배경 이미지 (200% 크기, 비율 유지) */}
       <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,
-        backgroundImage:`url(${bgImage})`,backgroundSize:"cover",backgroundPosition:"center center",
+        backgroundImage:`url(${bgImage})`,backgroundSize:"200%",backgroundPosition:"center top",
         opacity:0.8}}/>
       {/* 아래로 검정 페이드 오버레이 */}
       <div style={{position:"absolute",top:"40%",left:0,right:0,bottom:0,
         background:"linear-gradient(to bottom,transparent 0%,#000 55%)"}}/>
-      {/* 콘텐츠 */}
+      {/* 로고 + 제목: 화면 중앙 */}
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",
-        alignItems:"center",width:"100%",padding:"0 32px",marginTop:"-48px"}}>
-        {/* 로고 */}
+        alignItems:"center",width:"100%",padding:"0 32px",flex:1,justifyContent:"center"}}>
         <img src={logoImage} alt="경영학과 로고"
           style={{width:"200px",marginBottom:20,filter:"drop-shadow(0 4px 16px rgba(0,0,0,0.6))"}}/>
-        {/* 제목 */}
-        <div style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:-0.5,marginBottom:44,
+        <div style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:-0.5,
           textShadow:"0 2px 12px rgba(0,0,0,0.8)"}}>경영학과 주식게임</div>
-        {/* 게임 시작 버튼 */}
+      </div>
+      {/* 버튼: 하단 고정 */}
+      <div style={{position:"relative",zIndex:1,width:"100%",padding:"0 32px 48px"}}>
         <button onClick={()=>setMode("user")}
           style={{background:"#fff",color:"#000",border:"none",
             borderRadius:14,padding:"17px 0",fontSize:17,fontWeight:700,cursor:"pointer",
@@ -5132,13 +5132,14 @@ export default function App(){
           onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
           게임 시작하기
         </button>
-        {/* 운영자 입장 */}
-        <button onClick={()=>setMode("admin")}
-          style={{background:"none",color:"rgba(255,255,255,0.35)",border:"none",
-            fontSize:12,fontWeight:400,cursor:"pointer",fontFamily:"inherit",
-            textDecoration:"underline",padding:"14px 8px 0"}}>
-          운영자 입장
-        </button>
+        <div style={{textAlign:"center",marginTop:14}}>
+          <button onClick={()=>setMode("admin")}
+            style={{background:"none",color:"rgba(255,255,255,0.35)",border:"none",
+              fontSize:12,fontWeight:400,cursor:"pointer",fontFamily:"inherit",
+              textDecoration:"underline",padding:"4px 8px"}}>
+            운영자 입장
+          </button>
+        </div>
       </div>
     </div>
   );
