@@ -482,6 +482,39 @@ const BUILT_IN_TEMPLATES = [
       {id:"e8",name:"3R 치명 악재 - J 조선",emoji:"⚓",desc:"J조선, 수주했던 수조 원 규모 초대형 유조선 프로젝트 계약 상대측 파산으로 전격 취소",globalEffect:0,stockEffects:{s10:-26},note:"3라운드 대폭락 재료",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
       {id:"e9",name:"3R 황당 찌라시 - G 식품",emoji:"🔴",desc:"G식품 회장님이 꿈에서 조상님 계시를 받아 모든 로고·포장지를 내일부터 빨간색으로 변경 예정",globalEffect:0,stockEffects:{s7:10},note:"3라운드 찌라시 재등장",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true},
     ],
+    rules:`📌 기본 설정
+• 시작 자금: 50만 원
+• 총 3라운드 (라운드당 매매 10분)
+• 수수료: 매수·매도 각 0.1%
+
+⏱ 진행 순서
+1라운드: 베팅(3분) → 매매(10분) → 종가확인(1분)
+2라운드: 베팅(3분) → 매매(10분) → 종가확인(1분)
+3라운드: 매매(10분) → 최종결과(5분)
+
+📈 주식 매매
+• 라운드 진행 중에만 매수·매도 가능
+• 수수료 0.1%가 매수·매도 각각 부과됨
+• 매매 중 현재가는 비공개, 종가는 결과 확인 시 공개
+• ⚠️ H 뷰티(💄): 3라운드 시작 시 상장폐지
+  보유 중이면 강제 매도 처리됨 (주의!)
+
+🎲 베팅 (조장 전용)
+• 1·2라운드 시작 전 3분간 진행 (3라운드 베팅 없음)
+• 종목별로 상승▲ 또는 하락▼ 예측 후 금액 베팅
+• 베팅금은 즉시 현금에서 차감, 마감 전 취소 가능
+• 적중 시 베팅금 × 배당률 지급 (기본 1.8배)
+• 참가자 쏠림에 따라 배당률 1.2~3.0배로 자동 조정
+• 동점(가격 변동 없음)은 실패 처리
+
+💎 다이아몬드 상점 (조장 전용)
+• 조장이 구매한 힌트는 같은 조 전원이 열람 가능
+• 거시 힌트 - 라운드 전체 시장 방향: 💎 4
+• 종목별 힌트 - 개별 종목 라운드별 정보: 💎 2
+
+🏆 순위
+• 개인 순위: 현금 + 보유주식 평가액 (총자산 기준)
+• 조 순위: 같은 조 구성원 총자산 합산`,
   },
   {
     id:"tpl7", name:"⚡ 단기 집중전 (25분)", builtIn:true,
@@ -1890,6 +1923,7 @@ function AdminApp({onBack=null}){
       currentPhaseDetail: "",
       currentPhase: "ready",
       resultHint: "",
+      rules: tpl.rules !== undefined ? tpl.rules : ss.rules,
     }));
 
     t2(`"${tpl.name}" 적용 완료 ✓`);
