@@ -742,7 +742,7 @@ const INIT_SS={
 
 const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, initCash = DEFAULT_INIT_CASH) => {
   const freshTeams = {};
-  for (const [name, { id, pw, groupName }] of Object.entries(teamCredentials || {})) {
+  for (const [name, { id, groupName }] of Object.entries(teamCredentials || {})) {
     const existingPoints = existingTeams?.[id]?.diamonds || 0;
     freshTeams[id] = {
       name,
@@ -752,7 +752,6 @@ const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, init
       purchases: ["_empty"],
       history: ["_empty"],
       borrowed: 0,
-      pw,
       diamonds: existingPoints,
     };
   }
@@ -1648,7 +1647,6 @@ function AdminApp({onBack=null}){
   const [adminChatInput,setAdminChatInput]=useState("");
   const [newGroupName,setNewGroupName]=useState("1조");
   const [newMemberName,setNewMemberName]=useState("");
-  const [newMemberPw,setNewMemberPw]=useState("");
   const [batchCount,setBatchCount]=useState(5);
   const [pointGroupTarget,setPointGroupTarget]=useState("전체");
   const [groupPointInput,setGroupPointInput]=useState("");
@@ -1952,13 +1950,13 @@ function AdminApp({onBack=null}){
 
   // 팀 계정
   const addMember=()=>{
-    const name=newMemberName.trim(),pw=newMemberPw.trim(),group=newGroupName;
-    if(!name||!pw){t2("이름과 비밀번호 입력");return;}
+    const name=newMemberName.trim(),group=newGroupName;
+    if(!name){t2("이름 입력");return;}
     if(shared.teamCredentials?.[name]){t2("이미 있는 이름");return;}
     const id=uid();
     setShared(s=>({
       ...s,
-      teamCredentials:{...(s.teamCredentials||{}),[name]:{id,pw,groupName:group}},
+      teamCredentials:{...(s.teamCredentials||{}),[name]:{id,groupName:group}},
       teams:{...s.teams,[id]:{name,groupName:group,cash:s.initCash||DEFAULT_INIT_CASH,
         holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0}},
       groups:{...(s.groups||{}),[group]:{
@@ -1981,8 +1979,7 @@ function AdminApp({onBack=null}){
       const name=`${group}-${num}`;
       if(shared.teamCredentials?.[name]) continue;
       const id=uid();
-      const pw=Math.random().toString(36).slice(2,8);
-      newCreds[name]={id,pw,groupName:group};
+      newCreds[name]={id,groupName:group};
       newTeams[id]={name,groupName:group,cash:shared.initCash||DEFAULT_INIT_CASH,
         holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0};
       newMemberIds.push(id);
@@ -1997,6 +1994,13 @@ function AdminApp({onBack=null}){
       }},
     }));
     t2(`${group} ${count}명 일괄 등록 완료`);
+  };
+
+  const setGroupCode=(group,code)=>{
+    setShared(s=>({...s,groups:{...(s.groups||{}),[group]:{...(s.groups?.[group]||{}),code:code.trim()}}}));
+  };
+  const setGroupLeader=(group,leaderName)=>{
+    setShared(s=>({...s,groups:{...(s.groups||{}),[group]:{...(s.groups?.[group]||{}),leader:leaderName}}}));
   };
 
   const delMember=(name,id,group)=>{
@@ -3238,13 +3242,9 @@ function AdminApp({onBack=null}){
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
-            <div style={{display:"flex",gap:6,marginBottom:6}}>
+            <div style={{display:"flex",gap:6,marginBottom:10}}>
               <TextInput value={newMemberName} onChange={e=>setNewMemberName(e.target.value)}
                 placeholder="팀원 이름 (예: 홍길동)" style={{flex:1}}/>
-            </div>
-            <div style={{display:"flex",gap:6,marginBottom:10}}>
-              <TextInput value={newMemberPw} onChange={e=>setNewMemberPw(e.target.value)}
-                placeholder="비밀번호" style={{flex:1}}/>
               <Btn onClick={addMember} style={{flexShrink:0,padding:"9px 14px",fontSize:13}}>등록</Btn>
             </div>
           </div>
@@ -3322,28 +3322,41 @@ function AdminApp({onBack=null}){
                     },0);
                     const groupPoints=shared.groups?.[group]?.diamonds||0;
                     return(
-                      <div key={group} style={{marginBottom:12}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div key={group} style={{marginBottom:16}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                           <div style={{fontSize:13,fontWeight:700,color:G.black}}>{group} ({members.length}명)</div>
                           <div style={{display:"flex",gap:8,alignItems:"center"}}>
                             {groupPoints>0&&<div style={{fontSize:11,color:G.purple,fontWeight:600}}>💎 {groupPoints}</div>}
                             <div style={{fontSize:11,color:G.gray1}}>합산 {fmt(groupAsset)}</div>
                           </div>
                         </div>
-                        {members.map(([name,{id,pw}])=>{
+                        {/* 팀코드 + 조장 설정 */}
+                        <div style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
+                          <TextInput
+                            value={shared.groups?.[group]?.code||""}
+                            onChange={e=>setGroupCode(group,e.target.value)}
+                            placeholder="팀코드 입력"
+                            style={{flex:1,fontSize:12,padding:"6px 10px"}}/>
+                          <select
+                            value={shared.groups?.[group]?.leader||""}
+                            onChange={e=>setGroupLeader(group,e.target.value)}
+                            style={{flex:1,border:`1.5px solid ${G.border}`,borderRadius:8,padding:"6px 8px",fontSize:12,fontFamily:"inherit",outline:"none",color:G.black}}>
+                            <option value="">조장 선택</option>
+                            {members.map(([n])=><option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        {members.map(([name,{id}])=>{
                           const tm=shared.teams?.[id];
-                          const isOrphan=pw===null;
+                          const isLeaderMark=shared.groups?.[group]?.leader===name;
                           return(
                             <div key={name} style={{display:"flex",justifyContent:"space-between",
                               alignItems:"center",padding:"6px 10px",
-                              background:isOrphan?G.yellowLight:G.bg,
+                              background:isLeaderMark?G.yellowLight:G.bg,
                               borderRadius:8,marginBottom:4,
-                              border:isOrphan?`1px solid ${G.yellow}`:"none"}}>
-                              <div>
+                              border:isLeaderMark?`1px solid ${G.yellow}`:"none"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                {isLeaderMark&&<span style={{fontSize:11,background:G.orange,color:"#fff",borderRadius:20,padding:"1px 7px",fontWeight:700}}>조장</span>}
                                 <div style={{fontSize:12,fontWeight:600,color:G.black}}>{name}</div>
-                                <div style={{fontSize:10,color:isOrphan?G.orange:G.gray2,fontFamily:"monospace"}}>
-                                  {isOrphan?"⚠ 비번 없음 (계좌만 존재)":"PW: "+pw}
-                                </div>
                               </div>
                               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                                 {tm&&<div style={{fontSize:11,color:G.gray1}}>{fmt(tm.cash||0)}</div>}
@@ -3588,8 +3601,8 @@ function UserApp({previewAs=null,onBack=null}){
     return null;
   })();
   const [screen,setScreen]=useState(previewAs?"main":_savedSession?"main":"login");
+  const [loginCode,setLoginCode]=useState("");
   const [loginName,setLoginName]=useState("");
-  const [loginPw,setLoginPw]=useState("");
   const [loginErr,setLoginErr]=useState("");
   const [teamId,setTeamId]=useState(previewAs?.teamId||_savedSession?.id||null);
   const [teamName,setTeamName]=useState(previewAs?.teamName||_savedSession?.name||"");
@@ -3690,6 +3703,11 @@ function UserApp({previewAs=null,onBack=null}){
   const holdings=myTeam?.holdings??{};
   const purchases=myTeam?.purchases??[];
   const borrowed=myTeam?.borrowed??0;
+  const myGroupName=shared.teamCredentials?.[teamName]?.groupName;
+  const isLeader=!!(myGroupName&&shared.groups?.[myGroupName]?.leader===teamName);
+  const leaderName=myGroupName?shared.groups?.[myGroupName]?.leader:null;
+  const leaderId=leaderName?shared.teamCredentials?.[leaderName]?.id:null;
+  const leaderPurchases=leaderId?(shared.teams?.[leaderId]?.purchases??[]):[];
   const round=Math.max(shared.round,1);
   const maxRound=shared.maxRound||3;
   const feeRate=shared.feeRate??0.1;
@@ -3736,11 +3754,13 @@ function UserApp({previewAs=null,onBack=null}){
   },[cash,holdings,shared.stocks,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.phase]);
 
   const doLogin=()=>{
-    const name=loginName.trim(),pw=loginPw.trim();
-    if(!name||!pw){setLoginErr("이름과 비밀번호를 입력해주세요");return;}
+    const name=loginName.trim(),code=loginCode.trim();
+    if(!name||!code){setLoginErr("이름과 팀코드를 입력해주세요");return;}
+    const groupEntry=Object.entries(shared.groups||{}).find(([,g])=>g.code===code);
+    if(!groupEntry){setLoginErr("올바르지 않은 팀코드입니다");return;}
+    const [groupName]=groupEntry;
     const cred=shared.teamCredentials?.[name];
-    if(!cred){setLoginErr("등록되지 않은 이름입니다");return;}
-    if(cred.pw!==pw){setLoginErr("비밀번호가 올바르지 않습니다");return;}
+    if(!cred||cred.groupName!==groupName){setLoginErr("해당 조에 등록되지 않은 이름입니다");return;}
     try {
       localStorage.setItem('sg_session', JSON.stringify({ id: cred.id, name, ts: Date.now() }));
     } catch(e) {}
@@ -3843,6 +3863,7 @@ function UserApp({previewAs=null,onBack=null}){
   };
 
   const placeBet=(stockId,direction)=>{
+    if(!isLeader){t2("조장만 베팅할 수 있습니다");return;}
     const amount=parseInt(betInputs[stockId])||0;
     const minB=shared.minBet||100000;
     if(!amount||amount<minB){t2(`최소 베팅액: ${fmt(minB)}`);return;}
@@ -3903,6 +3924,7 @@ function UserApp({previewAs=null,onBack=null}){
   };
 
   const buyShop=async(item)=>{
+    if(!isLeader){t2("조장만 구매할 수 있습니다");return;}
     const latest=(shared.shopItems||[]).find(x=>x.id===item.id)||item;
     if(purchases.includes(latest.id)){t2("이미 구매한 항목");return;}
     const pointCost=latest.pointPrice||50;
@@ -4073,24 +4095,24 @@ function UserApp({previewAs=null,onBack=null}){
           </div>
         )}
         <div style={{marginBottom:36}}>
-          <div style={{fontSize:30,fontWeight:800,color:G.black,marginBottom:8,letterSpacing:-1}}>로(路) 주식 게임 🏦</div>
-          <div style={{fontSize:15,color:G.gray1,lineHeight:1.7}}>운영자에게 받은 팀 정보로<br/>로그인하세요</div>
+          <div style={{fontSize:30,fontWeight:800,color:G.black,marginBottom:8,letterSpacing:-1}}>경영학과 주식게임</div>
+          <div style={{fontSize:15,color:G.gray1,lineHeight:1.7}}>팀코드와 이름을 입력해주세요</div>
         </div>
         <div style={{marginBottom:12}}>
-          <div style={{fontSize:13,fontWeight:600,color:G.gray1,marginBottom:6}}>이름</div>
-          <input value={loginName} onChange={e=>{setLoginName(e.target.value);setLoginErr("");}} placeholder="운영자에게 받은 이름"
+          <div style={{fontSize:13,fontWeight:600,color:G.gray1,marginBottom:6}}>팀코드</div>
+          <input value={loginCode} onChange={e=>{setLoginCode(e.target.value);setLoginErr("");}} placeholder="운영자에게 받은 팀코드"
             onKeyDown={e=>e.key==="Enter"&&doLogin()}
             style={{width:"100%",border:`1.5px solid ${loginErr?G.red:G.border}`,borderRadius:12,padding:"14px 16px",fontSize:15,fontFamily:"inherit",outline:"none",color:G.black,boxSizing:"border-box"}}/>
         </div>
         <div style={{marginBottom:16}}>
-          <div style={{fontSize:13,fontWeight:600,color:G.gray1,marginBottom:6}}>비밀번호</div>
-          <input type="password" value={loginPw} onChange={e=>{setLoginPw(e.target.value);setLoginErr("");}} placeholder="운영자에게 받은 비밀번호"
+          <div style={{fontSize:13,fontWeight:600,color:G.gray1,marginBottom:6}}>이름</div>
+          <input value={loginName} onChange={e=>{setLoginName(e.target.value);setLoginErr("");}} placeholder="본인 이름"
             onKeyDown={e=>e.key==="Enter"&&doLogin()}
             style={{width:"100%",border:`1.5px solid ${loginErr?G.red:G.border}`,borderRadius:12,padding:"14px 16px",fontSize:15,fontFamily:"inherit",outline:"none",color:G.black,boxSizing:"border-box"}}/>
         </div>
         {loginErr&&<div style={{fontSize:13,color:G.red,marginBottom:10,padding:"10px 12px",background:G.redLight,borderRadius:8}}>{loginErr}</div>}
         <Btn onClick={doLogin} style={{width:"100%",padding:"15px",fontSize:16,borderRadius:12}}>게임 입장</Btn>
-        <div style={{textAlign:"center",marginTop:14,fontSize:12,color:G.gray2}}>팀 정보는 운영자에게 문의하세요</div>
+        <div style={{textAlign:"center",marginTop:14,fontSize:12,color:G.gray2}}>팀코드는 운영자에게 문의하세요</div>
       </div>
       <Toast {...toast}/>
     </div>
@@ -4541,7 +4563,10 @@ function UserApp({previewAs=null,onBack=null}){
                         </div>
                       )}
                     </div>
-                    {!myBet&&canBet&&<>
+                    {!myBet&&canBet&&!isLeader&&(
+                      <div style={{fontSize:12,color:G.gray2,padding:"8px 0"}}>베팅은 조장만 가능합니다</div>
+                    )}
+                    {!myBet&&canBet&&isLeader&&<>
                       <div style={{display:"flex",gap:4,marginBottom:8,fontSize:11,color:G.gray1}}>
                         <span style={{color:G.red}}>▲ {upCount}팀 (x{upOdds.toFixed(1)})</span>
                         <span style={{margin:"0 4px"}}>·</span>
@@ -4583,7 +4608,7 @@ function UserApp({previewAs=null,onBack=null}){
                         </div>
                       </div>
                     </>}
-                    {myBet&&canBet&&(
+                    {myBet&&canBet&&isLeader&&(
                       <div onClick={()=>cancelBet(st.id)}
                         style={{textAlign:"center",fontSize:12,color:G.red,cursor:"pointer",marginTop:4}}>
                         베팅 취소
@@ -4734,7 +4759,9 @@ function UserApp({previewAs=null,onBack=null}){
             </div>
           </div>
           {(shared.shopItems||[]).map(item=>{
-            const bought=purchases.includes(item.id);
+            const boughtByMe=purchases.includes(item.id);
+            const boughtByLeader=leaderPurchases.includes(item.id);
+            const hintVisible=boughtByMe||boughtByLeader;
             const pointCost=item.pointPrice||50;
             const canAfford=_gp>=pointCost;
             return(
@@ -4744,20 +4771,22 @@ function UserApp({previewAs=null,onBack=null}){
                     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
                       <span style={{fontSize:19}}>{item.emoji}</span>
                       <span style={{fontSize:14,fontWeight:700,color:G.black}}>{item.name}</span>
-                      {bought&&<span style={{fontSize:11,background:G.greenLight,color:G.green,borderRadius:20,padding:"2px 8px",fontWeight:600}}>구매완료</span>}
+                      {hintVisible&&<span style={{fontSize:11,background:G.greenLight,color:G.green,borderRadius:20,padding:"2px 8px",fontWeight:600}}>{boughtByLeader&&!boughtByMe?"조장구매":"구매완료"}</span>}
                     </div>
                     <div style={{fontSize:12,color:G.gray1,marginBottom:6,lineHeight:1.5}}>{item.desc}</div>
                     <div style={{fontSize:14,fontWeight:700,color:G.purple}}>💎 {pointCost}</div>
                   </div>
-                  <button onClick={()=>buyShop(item)} disabled={bought||!canAfford}
-                    style={{background:bought?G.greenLight:!canAfford?G.bg:G.purple,
-                      color:bought?G.green:!canAfford?G.gray2:G.white,
-                      border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,
-                      cursor:bought||!canAfford?"not-allowed":"pointer",fontFamily:"inherit",flexShrink:0}}>
-                    {bought?"✓":!canAfford?"💎부족":"구매"}
-                  </button>
+                  {isLeader&&(
+                    <button onClick={()=>buyShop(item)} disabled={boughtByMe||!canAfford}
+                      style={{background:boughtByMe?G.greenLight:!canAfford?G.bg:G.purple,
+                        color:boughtByMe?G.green:!canAfford?G.gray2:G.white,
+                        border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,
+                        cursor:boughtByMe||!canAfford?"not-allowed":"pointer",fontFamily:"inherit",flexShrink:0}}>
+                      {boughtByMe?"✓":!canAfford?"💎부족":"구매"}
+                    </button>
+                  )}
                 </div>
-                {bought&&(
+                {hintVisible&&(
                   <div style={{marginTop:10,padding:"12px 13px",background:"linear-gradient(135deg,#F0EEFF,#EBF3FE)",borderRadius:11,border:`1.5px solid ${G.purple}22`}}>
                     <div style={{fontSize:11,fontWeight:700,color:G.purple,marginBottom:5}}>🔓 공개된 힌트</div>
                     <div style={{fontSize:13,color:G.black,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{item.hint}</div>
@@ -5089,16 +5118,18 @@ export default function App(){
   const shared=useShared();
   const [showLoginModal,setShowLoginModal]=useState(false);
   const [modalName,setModalName]=useState("");
-  const [modalPw,setModalPw]=useState("");
+  const [modalCode,setModalCode]=useState("");
   const [modalErr,setModalErr]=useState("");
 
-  const closeModal=()=>{setShowLoginModal(false);setModalName("");setModalPw("");setModalErr("");};
+  const closeModal=()=>{setShowLoginModal(false);setModalName("");setModalCode("");setModalErr("");};
   const doModalLogin=()=>{
-    const name=modalName.trim(),pw=modalPw.trim();
-    if(!name||!pw){setModalErr("이름과 비밀번호를 입력해주세요");return;}
+    const name=modalName.trim(),code=modalCode.trim();
+    if(!name||!code){setModalErr("이름과 팀코드를 입력해주세요");return;}
+    const groupEntry=Object.entries(shared.groups||{}).find(([,g])=>g.code===code);
+    if(!groupEntry){setModalErr("올바르지 않은 팀코드입니다");return;}
+    const [groupName]=groupEntry;
     const cred=shared.teamCredentials?.[name];
-    if(!cred){setModalErr("등록되지 않은 이름입니다");return;}
-    if(cred.pw!==pw){setModalErr("비밀번호가 올바르지 않습니다");return;}
+    if(!cred||cred.groupName!==groupName){setModalErr("해당 조에 등록되지 않은 이름입니다");return;}
     try{localStorage.setItem('sg_session',JSON.stringify({id:cred.id,name,ts:Date.now()}));}catch(e){}
     closeModal();
     setMode("user");
@@ -5173,18 +5204,18 @@ export default function App(){
                 style={{background:"none",border:"none",cursor:"pointer",
                   fontSize:20,color:"#aaa",lineHeight:1,padding:"4px 6px"}}>✕</button>
             </div>
-            {/* 이름 */}
+            {/* 팀코드 */}
             <div style={{marginBottom:12}}>
-              <input value={modalName} onChange={e=>{setModalName(e.target.value);setModalErr("");}}
-                placeholder="이름" onKeyDown={e=>e.key==="Enter"&&doModalLogin()}
+              <input value={modalCode} onChange={e=>{setModalCode(e.target.value);setModalErr("");}}
+                placeholder="팀코드" onKeyDown={e=>e.key==="Enter"&&doModalLogin()}
                 style={{width:"100%",border:`1.5px solid ${modalErr?"#e53935":"#e0e0e0"}`,
                   borderRadius:12,padding:"14px 16px",fontSize:15,fontFamily:"inherit",
                   outline:"none",color:"#111",boxSizing:"border-box"}}/>
             </div>
-            {/* 비밀번호 */}
+            {/* 이름 */}
             <div style={{marginBottom:16}}>
-              <input type="password" value={modalPw} onChange={e=>{setModalPw(e.target.value);setModalErr("");}}
-                placeholder="비밀번호" onKeyDown={e=>e.key==="Enter"&&doModalLogin()}
+              <input value={modalName} onChange={e=>{setModalName(e.target.value);setModalErr("");}}
+                placeholder="이름" onKeyDown={e=>e.key==="Enter"&&doModalLogin()}
                 style={{width:"100%",border:`1.5px solid ${modalErr?"#e53935":"#e0e0e0"}`,
                   borderRadius:12,padding:"14px 16px",fontSize:15,fontFamily:"inherit",
                   outline:"none",color:"#111",boxSizing:"border-box"}}/>
