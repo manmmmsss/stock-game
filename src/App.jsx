@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "./firebase";
 import { ref, onValue, set as fbSet, get } from "firebase/database";
-import heroImage from "./assets/hero.png";
+import bgImage from "./assets/MT_background.png";
+import logoImage from "./assets/MT_logo.png";
 
 const injectGlobal = () => {
   if (document.getElementById('sg-global')) return;
@@ -5101,34 +5102,41 @@ export default function App(){
   if(mode==="admin"){if(!auth)return <AdminLogin onSuccess={()=>{handleAdminLogin();setMode("admin");}} onBack={()=>setMode("select")}/>;return <AdminApp onBack={handleAdminBack}/>;};
   if(mode==="user") return <UserApp onBack={()=>setMode("select")}/>;
   return(
-    <div style={{...WRAP,background:"linear-gradient(160deg,#0f172a 0%,#1e3a5f 55%,#0f172a 100%)",
-      display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 28px"}}>
-      {/* 타이틀 */}
-      <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{fontSize:34,fontWeight:900,color:"#fff",letterSpacing:-1.5,
-          textShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>경영학과 주식게임</div>
-      </div>
-      {/* 이미지 영역 - hero.png를 원하는 이미지로 교체하세요 (src/assets/hero.png) */}
-      <div style={{marginBottom:40,borderRadius:20,overflow:"hidden",boxShadow:"0 8px 32px rgba(0,0,0,0.35)"}}>
-        <img src={heroImage} alt="경영학과 주식게임" style={{width:"100%",display:"block",objectFit:"cover"}}/>
-      </div>
-      {/* 버튼 */}
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+    <div style={{...WRAP,background:"#000",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+      {/* 배경 이미지 (상단 65% 영역, 불투명도 80%) */}
+      <div style={{position:"absolute",top:0,left:0,right:0,height:"65%",
+        backgroundImage:`url(${bgImage})`,backgroundSize:"cover",backgroundPosition:"center top",
+        opacity:0.8}}/>
+      {/* 아래로 검정 페이드 오버레이 */}
+      <div style={{position:"absolute",top:"40%",left:0,right:0,bottom:0,
+        background:"linear-gradient(to bottom,transparent 0%,#000 55%)"}}/>
+      {/* 콘텐츠 */}
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",
+        alignItems:"center",width:"100%",padding:"0 32px",marginTop:"-48px"}}>
+        {/* 로고 */}
+        <img src={logoImage} alt="경영학과 로고"
+          style={{width:"200px",marginBottom:20,filter:"drop-shadow(0 4px 16px rgba(0,0,0,0.6))"}}/>
+        {/* 제목 */}
+        <div style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:-0.5,marginBottom:44,
+          textShadow:"0 2px 12px rgba(0,0,0,0.8)"}}>경영학과 주식게임</div>
+        {/* 게임 시작 버튼 */}
         <button onClick={()=>setMode("user")}
-          style={{background:"#fff",color:G.black,border:"none",
-            borderRadius:14,padding:"18px 0",fontSize:17,fontWeight:700,cursor:"pointer",
+          style={{background:"#fff",color:"#000",border:"none",
+            borderRadius:14,padding:"17px 0",fontSize:17,fontWeight:700,cursor:"pointer",
             fontFamily:"inherit",textAlign:"center",width:"100%",
-            boxShadow:"0 8px 32px rgba(0,0,0,0.25)",transition:"transform .15s"}}
+            boxShadow:"0 8px 32px rgba(0,0,0,0.4)",transition:"transform .15s"}}
           onMouseDown={e=>e.currentTarget.style.transform="scale(0.97)"}
           onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
           onTouchStart={e=>e.currentTarget.style.transform="scale(0.97)"}
           onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
-          게임 참여하기
+          게임 시작하기
         </button>
+        {/* 운영자 입장 */}
         <button onClick={()=>setMode("admin")}
-          style={{background:"none",color:"rgba(255,255,255,0.4)",border:"none",
-            fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit",
-            textDecoration:"underline",padding:"4px 8px"}}>
+          style={{background:"none",color:"rgba(255,255,255,0.35)",border:"none",
+            fontSize:12,fontWeight:400,cursor:"pointer",fontFamily:"inherit",
+            textDecoration:"underline",padding:"14px 8px 0"}}>
           운영자 입장
         </button>
       </div>
