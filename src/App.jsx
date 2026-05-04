@@ -4253,59 +4253,49 @@ function UserApp({previewAs=null,onBack=null}){
       <div style={W.wrap}>
         <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
           side={orderSide} stock={st} qty={effectiveQty} price={displayPrice||0} fee={feeRate} leverage={leverage}/>
-        <div style={{background:G.white,padding:"env(safe-area-inset-top, 14px) 18px 16px",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
-          {shared.notice&&<div style={{marginBottom:8}}><NoticeBanner notice={shared.notice}/></div>}
-          {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent}/></div>}
-          <div onClick={()=>setScreen("main")}
-            style={{display:"inline-flex",alignItems:"center",gap:6,
-              background:G.bg,border:`1.5px solid ${G.border}`,
-              borderRadius:10,padding:"9px 16px",cursor:"pointer",
-              marginBottom:12,transition:"background .15s"}}
-            onMouseDown={e=>e.currentTarget.style.background=G.border}
-            onMouseUp={e=>e.currentTarget.style.background=G.bg}>
-            <span style={{fontSize:18,lineHeight:1}}>←</span>
-            <span style={{fontSize:14,fontWeight:600,color:G.black}}>뒤로가기</span>
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:4}}>
-            <div>
-              <div style={{fontSize:13,color:G.gray1,marginBottom:2}}>{st.emoji} {st.code}</div>
-              <div style={{fontSize:20,fontWeight:800,color:G.black,marginBottom:2}}>{st.name}</div>
-              {isBlind ? (
-                <div style={{fontSize:16,fontWeight:700,color:G.purple}}>🙈 블라인드 라운드</div>
-              ) : (
-                <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-                  <div style={{fontSize:26,fontWeight:800,color:isUp?G.red:p<0?G.blue:G.black}}>{fmtN(cur)}</div>
-                  <div style={{fontSize:13,fontWeight:600,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"▲ +":"▼ "}{p.toFixed(2)}%</div>
-                </div>
-              )}
+        <div style={{background:G.white,padding:"env(safe-area-inset-top, 10px) 18px 14px",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
+          {shared.notice&&<div style={{marginBottom:6}}><NoticeBanner notice={shared.notice}/></div>}
+          {shared.activeEvent&&<div style={{marginBottom:6}}><EventBanner event={shared.activeEvent}/></div>}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,paddingTop:4}}>
+            <div onClick={()=>setScreen("main")}
+              style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",padding:"6px 10px",
+                background:G.bg,borderRadius:20}}
+              onMouseDown={e=>e.currentTarget.style.opacity=".7"}
+              onMouseUp={e=>e.currentTarget.style.opacity="1"}>
+              <span style={{fontSize:16,lineHeight:1}}>←</span>
+              <span style={{fontSize:12,fontWeight:600,color:G.gray1}}>목록</span>
             </div>
-            {/* 오른쪽: 현재 단계 + 타이머 */}
-            <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{background:
-                shared.phase==="round"?G.greenLight:
-                shared.currentPhaseDetail==="betting"?G.purpleLight:
-                shared.currentPhaseDetail==="result"?G.yellowLight:G.gray4,
-                color:
-                shared.phase==="round"?G.green:
-                shared.currentPhaseDetail==="betting"?G.purple:
-                shared.currentPhaseDetail==="result"?G.yellow:G.gray1,
-                borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,marginBottom:4,display:"inline-block"}}>
+            <div style={{textAlign:"right"}}>
+              <div style={{
+                background:shared.phase==="round"?G.green:shared.currentPhaseDetail==="betting"?G.purple:shared.currentPhaseDetail==="result"?G.yellow:G.gray3,
+                color:G.white,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,marginBottom:3,display:"inline-block"}}>
                 {curStep ? curStep.label : "대기중"}
               </div>
               {stepRem !== null && (
-                <div style={{fontSize:18,fontWeight:800,
+                <div style={{fontSize:14,fontWeight:800,
                   color:stepRem<=30?G.red:stepRem<=60?G.orange:G.black,
                   fontFamily:"monospace",display:"block"}}>
-                  ⏱ {secToStr(stepRem)}
+                  {secToStr(stepRem)}
                 </div>
               )}
             </div>
           </div>
+          <div style={{marginBottom:6}}>
+            <div style={{fontSize:12,color:G.gray2,marginBottom:3}}>{st.emoji} {st.name}</div>
+            {isBlind ? (
+              <div style={{fontSize:15,fontWeight:700,color:G.purple}}>🙈 블라인드 라운드</div>
+            ) : (
+              <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                <div style={{fontSize:24,fontWeight:800,color:isUp?G.red:p<0?G.blue:G.black}}>{fmtN(cur)}</div>
+                <div style={{fontSize:13,fontWeight:600,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"▲ +":"▼ "}{p.toFixed(2)}%</div>
+              </div>
+            )}
+          </div>
           {st.listed===false&&(
-            <div style={{fontSize:12,color:G.red,fontWeight:500,marginTop:2}}>⛔ 폐지된 종목</div>
+            <div style={{fontSize:12,color:G.red,fontWeight:500}}>⛔ 폐지된 종목</div>
           )}
           {shared.phase!=="round"&&st.listed!==false&&(
-            <div style={{fontSize:12,color:G.red,fontWeight:500,marginTop:2}}>🔴 매매 시간이 아닙니다</div>
+            <div style={{fontSize:12,color:G.gray2,fontWeight:500}}>매매 시간이 아닙니다</div>
           )}
         </div>
         <div style={{paddingBottom:"env(safe-area-inset-bottom, 100px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
@@ -4428,58 +4418,46 @@ function UserApp({previewAs=null,onBack=null}){
     <div style={W.wrap}>
       <ConfirmModal show={confirm} onConfirm={doOrder} onCancel={()=>setConfirm(false)}
         side={orderSide} stock={detail} qty={effectiveQty} price={orderPrice} fee={feeRate} leverage={leverage}/>
-      <div style={{background:G.white,padding:"env(safe-area-inset-top, 16px) 18px 0",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
-        {shared.notice&&<div style={{marginBottom:8}}><NoticeBanner notice={shared.notice}/></div>}
-        {shared.activeEvent&&<div style={{marginBottom:8}}><EventBanner event={shared.activeEvent}/></div>}
-        {isBlind&&<div style={{background:G.purpleLight,padding:"6px 14px",marginBottom:8,borderRadius:8}}>
-          <span style={{fontSize:12,color:G.purple,fontWeight:700}}>🙈 블라인드 라운드 — 가격이 숨겨집니다</span>
+      <div style={{background:G.white,padding:"env(safe-area-inset-top, 10px) 18px 0",position:"sticky",top:"env(safe-area-inset-top, 0)",zIndex:50,borderBottom:`1px solid ${G.border}`}}>
+        {shared.notice&&<div style={{marginBottom:6}}><NoticeBanner notice={shared.notice}/></div>}
+        {shared.activeEvent&&<div style={{marginBottom:6}}><EventBanner event={shared.activeEvent}/></div>}
+        {isBlind&&<div style={{background:G.purpleLight,padding:"4px 10px",marginBottom:6,borderRadius:20,display:"inline-block"}}>
+          <span style={{fontSize:11,color:G.purple,fontWeight:700}}>🙈 블라인드</span>
         </div>}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",paddingTop:4,marginBottom:12}}>
           <div>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:1}}>
-              <div style={{fontSize:12,color:G.gray1}}>{teamName}팀</div>
-              {onBack&&!previewAs&&(
-                <div onClick={onBack} style={{display:"flex",alignItems:"center",gap:3,cursor:"pointer",padding:"2px 8px",borderRadius:8,background:G.bg,border:`1px solid ${G.border}`}}>
-                  <span style={{fontSize:12}}>←</span>
-                  <span style={{fontSize:10,fontWeight:600,color:G.gray2}}>나가기</span>
-                </div>
-              )}
+            <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>
+              {teamName}
+              {onBack&&!previewAs&&<span onClick={onBack} style={{marginLeft:8,cursor:"pointer",color:G.gray2,borderBottom:`1px solid ${G.gray3}`}}>나가기</span>}
             </div>
-            <div style={{fontSize:26,fontWeight:800,color:G.black,letterSpacing:-0.5}}>{fmt(total)}</div>
-            <div style={{fontSize:13,fontWeight:600,color:diff>=0?G.red:G.blue,marginTop:1}}>
+            <div style={{fontSize:27,fontWeight:800,color:G.black,letterSpacing:-0.5,lineHeight:1.15}}>{fmt(total)}</div>
+            <div style={{fontSize:12,fontWeight:600,color:diff>=0?G.red:G.blue,marginTop:3}}>
               {diff>=0?"▲ +":"▼ "}{fmt(Math.abs(diff))} ({diff>=0?"+":""}{diffPct}%)
             </div>
             {(()=>{
               const mgn=shared.teamCredentials?.[teamName]?.groupName;
               const gp=shared.groups?.[mgn]?.diamonds||0;
-              return gp>0&&mgn?(
-                <div style={{fontSize:12,color:G.purple,fontWeight:600,marginTop:2}}>💎 {gp} ({mgn})</div>
-              ):null;
+              return gp>0&&mgn?<div style={{fontSize:11,color:G.purple,fontWeight:600,marginTop:3}}>💎 {gp}</div>:null;
             })()}
           </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{background:
-              shared.phase==="round"?G.greenLight:
-              shared.currentPhaseDetail==="betting"?G.purpleLight:
-              shared.currentPhaseDetail==="result"?G.yellowLight:G.gray4,
-              color:
-              shared.phase==="round"?G.green:
-              shared.currentPhaseDetail==="betting"?G.purple:
-              shared.currentPhaseDetail==="result"?G.yellow:G.gray1,
-              borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,marginBottom:3,display:"inline-block"}}>
+          <div style={{textAlign:"right",paddingTop:4}}>
+            <div style={{
+              background:shared.phase==="round"?G.green:shared.currentPhaseDetail==="betting"?G.purple:shared.currentPhaseDetail==="result"?G.yellow:G.gray3,
+              color:G.white,borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700,marginBottom:4,display:"inline-block",
+              boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>
               {curStep ? curStep.label : "대기중"}
             </div>
             {stepRem !== null && (
-              <div style={{fontSize:14,fontWeight:800,color:stepRem<=30?G.red:stepRem<=60?G.orange:G.black,fontFamily:"monospace"}}>
-                ⏱ {secToStr(stepRem)}
+              <div style={{fontSize:16,fontWeight:800,color:stepRem<=30?G.red:stepRem<=60?G.orange:G.black,fontFamily:"monospace",display:"block"}}>
+                {secToStr(stepRem)}
               </div>
             )}
           </div>
         </div>
         <div style={{display:"flex",margin:"0 -18px"}}>
           {[["market","시장"],["portfolio","보유"],["shop","상점"],["rules","규칙"]].map(([key,label])=>(
-            <div key={key} onClick={()=>setTab(key)} style={{flex:1,textAlign:"center",padding:"9px 0",fontSize:12,fontWeight:600,
-              color:tab===key?G.blue:G.gray1,borderBottom:`2px solid ${tab===key?G.blue:"transparent"}`,cursor:"pointer",transition:"all .15s"}}>{label}</div>
+            <div key={key} onClick={()=>setTab(key)} style={{flex:1,textAlign:"center",padding:"10px 0",fontSize:12,fontWeight:600,
+              color:tab===key?G.blue:G.gray2,borderBottom:`2px solid ${tab===key?G.blue:"transparent"}`,cursor:"pointer",transition:"color .15s"}}>{label}</div>
           ))}
         </div>
       </div>
@@ -4488,32 +4466,29 @@ function UserApp({previewAs=null,onBack=null}){
         {tab==="market"&&<>
           {/* 휴식 중 배너 */}
           {shared.phase==="break"&&(
-            <div style={{background:G.yellowLight,padding:"12px 18px",borderBottom:`1px solid ${G.border}`}}>
-              <div style={{fontSize:13,fontWeight:700,color:G.yellow}}>
-                R{shared.round} 종료 — 휴식 중
-                {shared.breakEndsAt&&breakRem!==null&&<span style={{fontFamily:"monospace",marginLeft:8}}>{secToStr(breakRem)}</span>}
+            <div style={{background:G.yellowLight,padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`1px solid ${G.border}`}}>
+              <div style={{fontSize:12,fontWeight:700,color:G.yellow}}>
+                R{shared.round} 종료
+                {(shared.round||0)<(shared.maxRound||3)&&<span style={{color:G.gray1,fontWeight:500,marginLeft:6}}>→ R{(shared.round||0)+1} 준비 중</span>}
               </div>
-              {(shared.round||0)<(shared.maxRound||3)&&<div style={{fontSize:11,color:G.gray1,marginTop:2}}>다음: R{(shared.round||0)+1}</div>}
+              {shared.breakEndsAt&&breakRem!==null&&<span style={{fontFamily:"monospace",fontSize:13,fontWeight:700,color:G.yellow}}>{secToStr(breakRem)}</span>}
             </div>
           )}
 
           {/* 방향 예측 베팅 패널 */}
           {isBettingPhase&&(
-            <div style={{background:G.white,margin:"0 0 8px",padding:"14px 18px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:800,color:G.black}}>
-                    🎲 {shared.phase==="ready"?"1라운드 예측 베팅":`${(shared.round||0)+1}라운드 예측 베팅`}
-                  </div>
-                  <div style={{fontSize:12,color:G.gray1,marginTop:2}}>종목별 상승/하락을 예측하세요</div>
+            <div style={{background:G.white,marginBottom:8,padding:"14px 18px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:13,fontWeight:800,color:G.black}}>
+                  🎲 R{shared.phase==="ready"?1:(shared.round||0)+1} 예측 베팅
                 </div>
-                <div style={{background:betRem!==null&&betRem>0?G.redLight:G.gray4,borderRadius:20,padding:"4px 12px"}}>
-                  <span style={{fontSize:13,fontWeight:700,
-                    color:betRem!==null&&betRem>0?G.red:G.gray1,fontFamily:"monospace"}}>
+                <div style={{background:betRem!==null&&betRem>0?G.red:G.gray3,borderRadius:20,padding:"3px 10px"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:G.white,fontFamily:"monospace"}}>
                     {betRem!==null&&betRem>0?secToStr(betRem):"마감"}
                   </span>
                 </div>
               </div>
+              {!isLeader&&<div style={{fontSize:12,color:G.gray2,marginBottom:8,padding:"8px 12px",background:G.bg,borderRadius:8}}>조장만 베팅할 수 있습니다. 현황을 확인하세요.</div>}
               {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
                 const nextR=shared.phase==="ready"?1:(shared.round||0)+1;
                 const oddsInfo=shared.betOdds?.[st.id];
@@ -4525,72 +4500,56 @@ function UserApp({previewAs=null,onBack=null}){
                 const canBet=betRem!==null&&betRem>0;
                 const inputAmt=betInputs[st.id]||"";
                 return(
-                  <div key={st.id} style={{marginBottom:10,background:G.bg,borderRadius:12,padding:"12px 14px"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div key={st.id} style={{marginBottom:8,background:G.bg,borderRadius:12,padding:"11px 13px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:myBet||(!canBet)||(!isLeader)?0:8}}>
                       <div style={{fontSize:13,fontWeight:700,color:G.black}}>{st.emoji} {st.name}</div>
                       {myBet&&(
-                        <div style={{fontSize:11,fontWeight:600,
+                        <div style={{fontSize:11,fontWeight:700,
                           color:myBet.direction==="up"?G.red:G.blue,
                           background:myBet.direction==="up"?G.redLight:G.blueLight,
                           borderRadius:20,padding:"2px 10px"}}>
-                          {myBet.direction==="up"?"▲ 상승":"▼ 하락"} {fmt(myBet.amount)} 베팅완료
+                          {myBet.direction==="up"?"▲":"▼"} {fmt(myBet.amount)}
                         </div>
                       )}
+                      {!myBet&&<div style={{fontSize:11,color:G.gray2}}>
+                        <span style={{color:G.red}}>▲x{upOdds.toFixed(1)}</span>
+                        <span style={{margin:"0 5px",color:G.gray3}}>|</span>
+                        <span style={{color:G.blue}}>▼x{downOdds.toFixed(1)}</span>
+                      </div>}
                     </div>
-                    {!myBet&&canBet&&!isLeader&&(
-                      <div style={{fontSize:12,color:G.gray2,padding:"8px 0"}}>베팅은 조장만 가능합니다</div>
-                    )}
                     {!myBet&&canBet&&isLeader&&<>
-                      <div style={{display:"flex",gap:4,marginBottom:8,fontSize:11,color:G.gray1}}>
-                        <span style={{color:G.red}}>▲ {upCount}팀 (x{upOdds.toFixed(1)})</span>
-                        <span style={{margin:"0 4px"}}>·</span>
-                        <span style={{color:G.blue}}>▼ {downCount}팀 (x{downOdds.toFixed(1)})</span>
-                      </div>
-                      <div style={{display:"flex",gap:6,marginBottom:6}}>
+                      <div style={{display:"flex",gap:5,marginBottom:6}}>
                         <input type="number" value={inputAmt} placeholder="베팅 금액"
                           onChange={e=>setBetInputs(b=>({...b,[st.id]:e.target.value}))}
                           style={{flex:1,border:`1.5px solid ${G.border}`,borderRadius:8,
                             padding:"7px 10px",fontSize:12,fontFamily:"inherit",outline:"none",
                             background:G.white}}/>
-                      </div>
-                      <div style={{display:"flex",gap:4,marginBottom:8}}>
-                        {[100000,300000,500000].map(v=>(
-                          <div key={v} onClick={()=>setBetInputs(b=>({...b,[st.id]:String(v)}))}
-                            style={{flex:1,background:G.white,border:`1px solid ${G.border}`,
-                              borderRadius:6,padding:"4px 0",textAlign:"center",cursor:"pointer",
-                              fontSize:11,color:G.gray1}}>
-                            {v>=1000000?(v/1000000)+"백만":(v/10000)+"만"}
+                        {[100,300,500].map(v=>(
+                          <div key={v} onClick={()=>setBetInputs(b=>({...b,[st.id]:String(v*1000)}))}
+                            style={{background:G.white,border:`1px solid ${G.border}`,
+                              borderRadius:7,padding:"0 8px",display:"flex",alignItems:"center",cursor:"pointer",
+                              fontSize:11,color:G.gray1,whiteSpace:"nowrap"}}>
+                            {v}k
                           </div>
                         ))}
-                        <div onClick={()=>setBetInputs(b=>({...b,[st.id]:String(Math.floor(cash*((shared.maxBetPct||50)/100)))}))}
-                          style={{flex:1,background:G.white,border:`1px solid ${G.border}`,
-                            borderRadius:6,padding:"4px 0",textAlign:"center",cursor:"pointer",
-                            fontSize:11,color:G.gray1}}>
-                          최대
-                        </div>
                       </div>
                       <div style={{display:"flex",gap:6}}>
                         <div onClick={()=>placeBet(st.id,"up")}
                           style={{flex:1,background:G.red,color:G.white,borderRadius:9,
-                            padding:"9px 0",textAlign:"center",cursor:"pointer",fontWeight:700,fontSize:13}}>
+                            padding:"8px 0",textAlign:"center",cursor:"pointer",fontWeight:700,fontSize:13}}>
                           ▲ 상승
                         </div>
                         <div onClick={()=>placeBet(st.id,"down")}
                           style={{flex:1,background:G.blue,color:G.white,borderRadius:9,
-                            padding:"9px 0",textAlign:"center",cursor:"pointer",fontWeight:700,fontSize:13}}>
+                            padding:"8px 0",textAlign:"center",cursor:"pointer",fontWeight:700,fontSize:13}}>
                           ▼ 하락
                         </div>
                       </div>
                     </>}
                     {myBet&&canBet&&isLeader&&(
                       <div onClick={()=>cancelBet(st.id)}
-                        style={{textAlign:"center",fontSize:12,color:G.red,cursor:"pointer",marginTop:4}}>
-                        베팅 취소
-                      </div>
-                    )}
-                    {myBet&&!canBet&&(
-                      <div style={{fontSize:11,color:G.gray1,padding:"4px 0"}}>
-                        {myBet.direction==="up"?"▲ 상승":"▼ 하락"} {fmt(myBet.amount)} 베팅 완료 — 결과 대기 중
+                        style={{fontSize:11,color:G.gray2,cursor:"pointer",marginTop:6,textAlign:"right"}}>
+                        취소
                       </div>
                     )}
                   </div>
@@ -4624,9 +4583,8 @@ function UserApp({previewAs=null,onBack=null}){
             </div>
           )}
 
-          <div style={{padding:"10px 18px 5px",fontSize:12,color:G.gray1,fontWeight:500}}>
-            종목 현황 {shared.phase==="round"?`· Round ${shared.round}`:""}
-            {isBlind&&<span style={{color:G.purple,marginLeft:6}}>🙈 블라인드</span>}
+          <div style={{padding:"12px 18px 6px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontSize:12,color:G.gray2,fontWeight:500}}>종목{shared.phase==="round"?` · R${shared.round}`:""}</span>
           </div>
           {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
             const cur=isBlind?null:getLivePrice(st);
@@ -4634,18 +4592,18 @@ function UserApp({previewAs=null,onBack=null}){
             const p=isBlind?0:pctOf(cur,prev),isUp=p>0;
             return(
               <div key={st.id} onClick={()=>{setDetailSafe(st);setOrderSide("buy");setQty(1);setLeverage(1);setScreen("detail");}}
-                style={{background:G.white,display:"flex",alignItems:"center",padding:"13px 18px",borderBottom:`1px solid ${G.border}`,cursor:"pointer",gap:10}}>
-                <div style={{width:40,height:40,borderRadius:11,background:G.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{st.emoji}</div>
+                style={{background:G.white,display:"flex",alignItems:"center",padding:"13px 18px",borderBottom:`1px solid ${G.border}`,cursor:"pointer",gap:12}}>
+                <div style={{width:42,height:42,borderRadius:13,background:G.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{st.emoji}</div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:14,fontWeight:700,color:G.black,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.name}</div>
-                  <div style={{fontSize:11,color:G.gray2}}>{st.code}</div>
+                  <div style={{fontSize:14,fontWeight:700,color:G.black,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.name}</div>
                 </div>
                 <LiveMiniChart stock={st} round={round} roundStartedAt={shared.roundStartedAt} roundEndsAt={shared.roundEndsAt} activeEvent={shared.activeEvent} modifiedTargets={shared.modifiedTargets} eventSnapshots={shared.eventSnapshots} phase={shared.phase} blind={isBlind}/>
-                <div style={{textAlign:"right",flexShrink:0,minWidth:72}}>
+                <div style={{textAlign:"right",flexShrink:0,minWidth:76}}>
                   {isBlind
-                    ?<div style={{fontSize:14,fontWeight:700,color:G.purple}}>???</div>
-                    :<><div style={{fontSize:14,fontWeight:700,color:G.black,marginBottom:3}}>{fmtN(cur)}</div>
-                      <div style={{fontSize:11,fontWeight:600,padding:"2px 7px",borderRadius:5,
+                    ?<div style={{fontSize:15,fontWeight:700,color:G.gray3}}>—</div>
+                    :<>
+                      <div style={{fontSize:14,fontWeight:800,color:G.black,marginBottom:3}}>{fmtN(cur)}</div>
+                      <div style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:6,display:"inline-block",
                         background:isUp?G.redLight:p<0?G.blueLight:G.bg,color:isUp?G.red:p<0?G.blue:G.gray1}}>{isUp?"+":""}{p.toFixed(2)}%</div>
                     </>
                   }
@@ -4658,32 +4616,23 @@ function UserApp({previewAs=null,onBack=null}){
         {tab==="portfolio"&&<>
           {/* 자산 구성 카드 */}
           <div style={{background:G.white,padding:"16px 18px",borderBottom:`1px solid ${G.border}`}}>
-            <div style={{fontSize:12,color:G.gray1,marginBottom:10,fontWeight:500}}>자산 구성</div>
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
-              <div style={{flex:1,background:G.blueLight,borderRadius:12,padding:"12px 14px"}}>
-                <div style={{fontSize:11,color:G.blue,fontWeight:600,marginBottom:4}}>💵 보유 현금</div>
-                <div style={{fontSize:16,fontWeight:800,color:G.black}}>{fmt(cash)}</div>
-                <div style={{fontSize:11,color:G.gray1,marginTop:2}}>{total>0?((cash/total)*100).toFixed(1):0}%</div>
+            <div style={{display:"flex",gap:10,marginBottom:borrowed>0?10:0}}>
+              <div style={{flex:1,background:G.bg,borderRadius:12,padding:"12px 14px"}}>
+                <div style={{fontSize:11,color:G.gray2,fontWeight:500,marginBottom:4}}>현금</div>
+                <div style={{fontSize:15,fontWeight:800,color:G.black}}>{fmt(cash)}</div>
+                <div style={{fontSize:10,color:G.gray2,marginTop:2}}>{total>0?((cash/total)*100).toFixed(0):0}%</div>
               </div>
-              <div style={{flex:1,background:G.redLight,borderRadius:12,padding:"12px 14px"}}>
-                <div style={{fontSize:11,color:G.red,fontWeight:600,marginBottom:4}}>📈 주식 평가액</div>
-                <div style={{fontSize:16,fontWeight:800,color:G.black}}>{fmt(stockVal)}</div>
-                <div style={{fontSize:11,color:G.gray1,marginTop:2}}>{total>0?((stockVal/total)*100).toFixed(1):0}%</div>
+              <div style={{flex:1,background:G.bg,borderRadius:12,padding:"12px 14px"}}>
+                <div style={{fontSize:11,color:G.gray2,fontWeight:500,marginBottom:4}}>주식</div>
+                <div style={{fontSize:15,fontWeight:800,color:G.black}}>{fmt(stockVal)}</div>
+                <div style={{fontSize:10,color:G.gray2,marginTop:2}}>{total>0?((stockVal/total)*100).toFixed(0):0}%</div>
               </div>
             </div>
-            {borrowed>0&&<div style={{background:G.orangeLight,borderRadius:10,padding:"8px 12px",marginBottom:8}}>
-              <div style={{fontSize:11,color:G.orange,fontWeight:600}}>⚡ 레버리지 차입금: {fmt(borrowed)}</div>
+            {borrowed>0&&<div style={{background:G.orangeLight,borderRadius:10,padding:"8px 12px"}}>
+              <div style={{fontSize:11,color:G.orange,fontWeight:600}}>⚡ 차입금: {fmt(borrowed)}</div>
             </div>}
-            <div style={{height:6,borderRadius:3,background:G.border,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${total>0?(cash/total*100):100}%`,
-                background:`linear-gradient(90deg,${G.blue},${G.purple})`,borderRadius:3,transition:"width .5s"}}/>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-              <span style={{fontSize:10,color:G.blue}}>현금 {total>0?((cash/total)*100).toFixed(1):0}%</span>
-              <span style={{fontSize:10,color:G.red}}>주식 {total>0?((stockVal/total)*100).toFixed(1):0}%</span>
-            </div>
           </div>
-          <div style={{padding:"10px 18px 5px",fontSize:12,color:G.gray1,fontWeight:500}}>보유 종목</div>
+          <div style={{padding:"12px 18px 6px",fontSize:12,color:G.gray2,fontWeight:500}}>보유 종목</div>
           {(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).length===0
             ?<div style={{background:G.white,textAlign:"center",color:G.gray2,padding:"36px 0",fontSize:14}}>보유 종목 없음</div>
             :(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).map(st=>{
