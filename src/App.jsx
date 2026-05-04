@@ -4136,7 +4136,8 @@ function UserApp({previewAs=null,onBack=null}){
       <>
         <div style={W.wrap}>
           <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:G.white}}>
-            <div style={{background:`linear-gradient(135deg,${G.blue},${G.purple})`,padding:"40px 24px 32px",textAlign:"center"}}>
+            <div style={{background:`linear-gradient(135deg,${G.blue},${G.purple})`,padding:"40px 24px 32px",textAlign:"center",position:"relative"}}>
+              {onBack&&<button onClick={onBack} style={{position:"absolute",top:16,left:16,background:"rgba(255,255,255,0.18)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>← 처음으로</button>}
               <div style={{fontSize:48,marginBottom:12}}>{(myPersonalDiff||myGroupFd)>=0?"🏆":"📉"}</div>
               <div style={{fontSize:22,fontWeight:800,color:G.white,marginBottom:4}}>게임 종료!</div>
               <div style={{fontSize:14,color:"rgba(255,255,255,0.8)",marginBottom:20}}>{teamName} 최종 결과</div>
