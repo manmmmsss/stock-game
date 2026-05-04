@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "./firebase";
 import { ref, onValue, set as fbSet, get } from "firebase/database";
+import heroImage from "./assets/hero.png";
 
 const injectGlobal = () => {
   if (document.getElementById('sg-global')) return;
@@ -5103,54 +5104,33 @@ export default function App(){
     <div style={{...WRAP,background:"linear-gradient(160deg,#0f172a 0%,#1e3a5f 55%,#0f172a 100%)",
       display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 28px"}}>
       {/* 타이틀 */}
-      <div style={{textAlign:"center",marginBottom:52}}>
-        <div style={{fontSize:56,marginBottom:12,filter:"drop-shadow(0 4px 12px rgba(0,0,0,0.4))"}}>📈</div>
-        <div style={{fontSize:36,fontWeight:900,color:"#fff",letterSpacing:-1.5,marginBottom:8,
-          textShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>로(路) 주식게임</div>
-        <div style={{fontSize:14,color:"rgba(255,255,255,0.55)",lineHeight:1.8,letterSpacing:.2}}>
-          실전처럼 배우는 주식 투자 시뮬레이션
-        </div>
+      <div style={{textAlign:"center",marginBottom:32}}>
+        <div style={{fontSize:34,fontWeight:900,color:"#fff",letterSpacing:-1.5,
+          textShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>경영학과 주식게임</div>
+      </div>
+      {/* 이미지 영역 - hero.png를 원하는 이미지로 교체하세요 (src/assets/hero.png) */}
+      <div style={{marginBottom:40,borderRadius:20,overflow:"hidden",boxShadow:"0 8px 32px rgba(0,0,0,0.35)"}}>
+        <img src={heroImage} alt="경영학과 주식게임" style={{width:"100%",display:"block",objectFit:"cover"}}/>
       </div>
       {/* 버튼 */}
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
         <button onClick={()=>setMode("user")}
           style={{background:"#fff",color:G.black,border:"none",
-            borderRadius:18,padding:"22px 22px",fontSize:16,fontWeight:700,cursor:"pointer",
-            fontFamily:"inherit",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",
+            borderRadius:14,padding:"18px 0",fontSize:17,fontWeight:700,cursor:"pointer",
+            fontFamily:"inherit",textAlign:"center",width:"100%",
             boxShadow:"0 8px 32px rgba(0,0,0,0.25)",transition:"transform .15s"}}
           onMouseDown={e=>e.currentTarget.style.transform="scale(0.97)"}
           onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
           onTouchStart={e=>e.currentTarget.style.transform="scale(0.97)"}
           onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
-          <div>
-            <div style={{fontSize:18,marginBottom:4}}>🎮 주식게임 참여</div>
-            <div style={{fontSize:12,fontWeight:400,color:G.gray1}}>이름·비밀번호로 입장</div>
-          </div>
-          <div style={{width:36,height:36,borderRadius:12,background:G.blue,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <span style={{color:"#fff",fontSize:18,lineHeight:1}}>→</span>
-          </div>
+          게임 참여하기
         </button>
         <button onClick={()=>setMode("admin")}
-          style={{background:"rgba(255,255,255,0.08)",color:"#fff",
-            border:"1.5px solid rgba(255,255,255,0.18)",
-            borderRadius:18,padding:"22px 22px",fontSize:16,fontWeight:700,cursor:"pointer",
-            fontFamily:"inherit",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",
-            backdropFilter:"blur(8px)",transition:"transform .15s"}}
-          onMouseDown={e=>e.currentTarget.style.transform="scale(0.97)"}
-          onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
-          onTouchStart={e=>e.currentTarget.style.transform="scale(0.97)"}
-          onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
-          <div>
-            <div style={{fontSize:18,marginBottom:4}}>🛠 운영자 화면</div>
-            <div style={{fontSize:12,fontWeight:400,color:"rgba(255,255,255,0.5)"}}>라운드·설정·이벤트·계좌 관리</div>
-          </div>
-          <div style={{width:36,height:36,borderRadius:12,background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <span style={{color:"#fff",fontSize:18,lineHeight:1}}>→</span>
-          </div>
+          style={{background:"none",color:"rgba(255,255,255,0.4)",border:"none",
+            fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit",
+            textDecoration:"underline",padding:"4px 8px"}}>
+          운영자 입장
         </button>
-      </div>
-      <div style={{textAlign:"center",marginTop:32,fontSize:11,color:"rgba(255,255,255,0.3)"}}>
-        로(路) 주식 게임 · 실전 투자 시뮬레이션
       </div>
     </div>
   );
