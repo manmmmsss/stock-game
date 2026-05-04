@@ -5106,7 +5106,7 @@ export default function App(){
       position:"relative",overflow:"hidden"}}>
       {/* 배경 이미지 (200% 크기, 비율 유지) */}
       <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,
-        backgroundImage:`url(${bgImage})`,backgroundSize:"200%",backgroundPosition:"center top",
+        backgroundImage:`url(${bgImage})`,backgroundSize:"140%",backgroundPosition:"center top",
         opacity:0.8}}/>
       {/* 아래로 검정 페이드 오버레이 */}
       <div style={{position:"absolute",top:"40%",left:0,right:0,bottom:0,
