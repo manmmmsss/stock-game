@@ -1113,7 +1113,7 @@ function NoticeBanner({notice}){
   );
 }
 
-function EventBanner({event}){
+function EventBanner({event, showEffect=false}){
   if(!event) return null;
   return(
     <div style={{background:`linear-gradient(135deg,${G.orange},${G.red})`,color:G.white,padding:"9px 14px",display:"flex",alignItems:"center",gap:10}}>
@@ -1122,9 +1122,11 @@ function EventBanner({event}){
         <div style={{fontSize:12,fontWeight:800,marginBottom:1}}>🚨 긴급: {event.name}</div>
         <div style={{fontSize:11,opacity:.9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{event.desc}</div>
       </div>
-      <div style={{fontSize:13,fontWeight:800,flexShrink:0,color:event.globalEffect>=0?"#FFD700":G.white}}>
-        {event.globalEffect>=0?"+":""}{event.globalEffect}%
-      </div>
+      {showEffect&&(
+        <div style={{fontSize:13,fontWeight:800,flexShrink:0,color:event.globalEffect>=0?"#FFD700":G.white}}>
+          {event.globalEffect>=0?"+":""}{event.globalEffect}%
+        </div>
+      )}
     </div>
   );
 }
@@ -1229,6 +1231,11 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
     const snap = eventSnapshots?.[stock.id];
     const hasSnap = snap && snap.appliedAt >= roundStartedAt;
 
+    // 이벤트 발동 전 구간 캔들은 원래 목표가(originalPrice) 사용
+    const originalTarget = (hasSnap && modifiedTargets?.[stock.id]?.round === round && modifiedTargets[stock.id].originalPrice !== undefined)
+      ? modifiedTargets[stock.id].originalPrice
+      : stock.prices[ri];
+
     let effectiveBase, effectiveTarget, effectiveElapsed, effectiveTotal, seedTs;
 
     if (hasSnap && snap.appliedAt > roundStartedAt && snap.appliedAt < roundEndsAt && atTs >= snap.appliedAt) {
@@ -1239,7 +1246,8 @@ function LiveBigChart({ stock, round, roundStartedAt, roundEndsAt, activeEvent, 
       seedTs = snap.appliedAt;
     } else {
       effectiveBase = startPrice;
-      effectiveTarget = target;
+      // 이벤트 발동 이전 시점의 캔들은 원래 목표가로 계산
+      effectiveTarget = (hasSnap && atTs < snap.appliedAt) ? originalTarget : target;
       effectiveElapsed = atTs - roundStartedAt;
       effectiveTotal = roundEndsAt - roundStartedAt;
       seedTs = roundStartedAt;
@@ -1820,11 +1828,23 @@ function AdminApp({onBack=null}){
           }
         }
 
+        // 이벤트로 수정된 종가를 stock.prices에 반영 → 다음 라운드 시작가 연속성 보장
+        const nextStocks = (s.stocks || []).map(stock => {
+          const mod = s.modifiedTargets?.[stock.id];
+          if (mod && mod.round === r) {
+            const newPrices = [...stock.prices];
+            newPrices[r - 1] = mod.modifiedPrice;
+            return { ...stock, prices: newPrices };
+          }
+          return stock;
+        });
+
         return {
           ...s, ...baseUpdates,
           phase: isLast ? "ended" : "break",
           roundEndsAt: null, roundStartedAt: null,
           teams,
+          stocks: nextStocks,
           bets: { ...(s.bets || {}), [r]: newBetsForRound },
           betOdds: {},
         };
@@ -2251,8 +2271,20 @@ function AdminApp({onBack=null}){
       const breakEnd=s.autoPlay?(nowT+s.breakDuration*1000):null;
       const betEnd=s.betEnabled?(nowT+(s.betWindow||30)*1000):null;
 
+      // 이벤트로 수정된 종가를 stock.prices에 반영 → 다음 라운드 시작가 연속성 보장
+      const nextStocks=(s.stocks||[]).map(stock=>{
+        const mod=s.modifiedTargets?.[stock.id];
+        if(mod&&mod.round===r){
+          const newPrices=[...stock.prices];
+          newPrices[r-1]=mod.modifiedPrice;
+          return{...stock,prices:newPrices};
+        }
+        return stock;
+      });
+
       return{...s,
         phase:"break",roundEndsAt:null,roundStartedAt:null,teams,
+        stocks:nextStocks,
         bets:newBets,betOdds:{},
         breakEndsAt:breakEnd,
         betDeadline:betEnd,
@@ -2496,7 +2528,7 @@ function AdminApp({onBack=null}){
           <span style={{fontSize:16,fontWeight:800,color:G.black}}>운영자 패널</span>
           <div style={{marginLeft:"auto",background:phaseBg,color:phaseColor,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>{phaseLabel}</div>
         </div>
-        {shared.activeEvent&&<div style={{marginBottom:6}}><EventBanner event={shared.activeEvent}/></div>}
+        {shared.activeEvent&&<div style={{marginBottom:6}}><EventBanner event={shared.activeEvent} showEffect={true}/></div>}
         <div style={{display:"flex",overflowX:"auto"}}>
           {TABS.map(([key,label])=>(
             <div key={key} onClick={()=>setTab(key)} style={{flex:1,textAlign:"center",padding:"8px 6px",fontSize:11,fontWeight:600,
