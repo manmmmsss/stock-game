@@ -2629,10 +2629,7 @@ function AdminApp({onBack=null}){
                       <div style={{fontSize:11,fontWeight:600,color:msg.teamName==="🛠 운영자"?G.orange:G.blue,marginBottom:2}}>
                         {msg.teamName}
                       </div>
-                      {msg.type==="trade"
-                        ?<div style={{fontSize:11,color:G.gray1}}>📊 거래 제안 카드</div>
-                        :<div style={{fontSize:12,color:G.black,wordBreak:"break-all"}}>{msg.text}</div>
-                      }
+                      <div style={{fontSize:12,color:G.black,wordBreak:"break-all"}}>{msg.text}</div>
                       <div style={{fontSize:10,color:G.gray2,marginTop:2}}>
                         {new Date(msg.ts).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
                       </div>
@@ -3640,11 +3637,6 @@ function UserApp({previewAs=null,onBack=null}){
   const [unreadCount, setUnreadCount] = useState(0);
   const chatBottomRef = useRef(null);
   const lastReadTs = useRef(0);
-  const [showTradeForm, setShowTradeForm] = useState(false);
-  const [tradeStock, setTradeStock] = useState("");
-  const [tradeQty, setTradeQty] = useState(1);
-  const [tradePrice, setTradePrice] = useState(0);
-  const [tradeTo, setTradeTo] = useState("전체공개");
 
   useEffect(() => {
     if (screen === "ended") {
@@ -3960,96 +3952,6 @@ function UserApp({previewAs=null,onBack=null}){
     setChatInput("");
   };
 
-  const sendTradeOffer = () => {
-    const st = shared.stocks?.find(x => x.id === tradeStock);
-    if (!st) { t2("종목을 선택하세요"); return; }
-    if (tradeQty < 1) { t2("수량을 입력하세요"); return; }
-    if (tradePrice < 1) { t2("가격을 입력하세요"); return; }
-    const myHolding = holdings[tradeStock]?.qty || 0;
-    if (myHolding < tradeQty) { t2("보유 수량 부족"); return; }
-    const offerId = uid();
-    const offer = {
-      id: offerId, fromTeam: teamName, fromTeamId: teamId,
-      toTeam: tradeTo, stockId: st.id, stockName: st.name, stockEmoji: st.emoji,
-      qty: tradeQty, price: tradePrice, status: "pending", ts: Date.now(),
-    };
-    const chatMsg = { id: uid(), teamName, text: "", ts: Date.now(), type: "trade", offerId };
-    setShared(s => ({
-      ...s,
-      tradeOffers: { ...(s.tradeOffers || {}), [offerId]: offer },
-      chatMessages: [...(Array.isArray(s.chatMessages) ? s.chatMessages : []), chatMsg].slice(-200),
-    }));
-    setShowTradeForm(false);
-    setTradeStock(""); setTradeQty(1); setTradePrice(0);
-    t2("거래 제안 올림!");
-  };
-
-  const acceptTrade = (offer) => {
-    if (offer.status !== "pending") { t2("이미 처리된 거래"); return; }
-    if (offer.fromTeamId === teamId) { t2("본인 거래는 수락 불가"); return; }
-    const totalCost = offer.price * offer.qty;
-    if (cash < totalCost) { t2("잔액 부족"); return; }
-    const systemMsg = {
-      id: uid(), teamName: "🤝 시스템",
-      text: `${offer.fromTeam} → ${teamName} | ${offer.stockEmoji} ${offer.stockName} ${offer.qty}주 @ ${fmtN(offer.price)}원 거래 완료!`,
-      ts: Date.now(), type: "system",
-    };
-    setShared(s => {
-      const sellerId = Object.keys(s.teams || {}).find(id => s.teams[id].name === offer.fromTeam);
-      if (!sellerId) return s;
-      const seller = s.teams[sellerId];
-      const sellerHolding = seller.holdings?.[offer.stockId] || { qty: 0, avgPrice: 0 };
-      if (sellerHolding.qty < offer.qty) return s;
-      const buyerTeam = s.teams[teamId];
-      const buyerHolding = buyerTeam?.holdings?.[offer.stockId] || { qty: 0, avgPrice: 0 };
-      const newBuyerQty = buyerHolding.qty + offer.qty;
-      const newBuyerAvg = Math.round((buyerHolding.avgPrice * buyerHolding.qty + offer.price * offer.qty) / newBuyerQty);
-      const sellerHistory = Array.isArray(seller.history)
-        ? seller.history : Object.values(seller.history || {});
-      const buyerHistory = Array.isArray(buyerTeam.history)
-        ? buyerTeam.history : Object.values(buyerTeam.history || {});
-      return {
-        ...s,
-        tradeOffers: { ...(s.tradeOffers || {}), [offer.id]: { ...offer, status: "accepted", acceptedBy: teamName } },
-        teams: {
-          ...s.teams,
-          [sellerId]: {
-            ...seller,
-            cash: seller.cash + offer.price * offer.qty,
-            holdings: { ...seller.holdings, [offer.stockId]: { ...sellerHolding, qty: sellerHolding.qty - offer.qty } },
-            history: [...sellerHistory, {
-              time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-              type: 'sell', stockName: offer.stockName, stockEmoji: offer.stockEmoji,
-              qty: offer.qty, price: offer.price, total: offer.price * offer.qty,
-            }],
-          },
-          [teamId]: {
-            ...buyerTeam,
-            cash: buyerTeam.cash - offer.price * offer.qty,
-            holdings: { ...buyerTeam.holdings, [offer.stockId]: { qty: newBuyerQty, avgPrice: newBuyerAvg } },
-            history: [...buyerHistory, {
-              time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-              type: 'buy', stockName: offer.stockName, stockEmoji: offer.stockEmoji,
-              qty: offer.qty, price: offer.price, total: offer.price * offer.qty,
-            }],
-          },
-        },
-        chatMessages: [...(Array.isArray(s.chatMessages) ? s.chatMessages : []), systemMsg].slice(-200),
-      };
-    });
-    t2("거래 체결!");
-  };
-
-  const cancelTrade = (offerId) => {
-    setShared(s => ({
-      ...s,
-      tradeOffers: {
-        ...(s.tradeOffers || {}),
-        [offerId]: { ...(s.tradeOffers?.[offerId] || {}), status: "cancelled" },
-      },
-    }));
-    t2("거래 취소됨");
-  };
 
   const total=totalAsset(),diff=total-initCash,diffPct=((diff/initCash)*100).toFixed(2);
   const stockVal=total-cash;
@@ -4858,59 +4760,7 @@ function UserApp({previewAs=null,onBack=null}){
                     );
                   }
 
-                  if (msg.type === "trade" && msg.offerId) {
-                    const offer = shared.tradeOffers?.[msg.offerId];
-                    if (!offer) return null;
-                    const isPending = offer.status === "pending";
-                    const canAccept = isPending && offer.fromTeamId !== teamId
-                      && (offer.toTeam === "전체공개" || offer.toTeam === teamName);
-                    const canCancel = isPending && offer.fromTeamId === teamId;
-                    return (
-                      <div key={msg.id} style={{ display: "flex", justifyContent: isMine ? "flex-end" : "flex-start" }}>
-                        <div style={{ maxWidth: "90%", background: G.white, border: `1.5px solid ${isPending ? G.blue : G.border}`,
-                          borderRadius: 12, padding: "10px 12px", fontSize: 12 }}>
-                          <div style={{ fontSize: 10, color: G.gray2, marginBottom: 4 }}>
-                            {offer.fromTeam} {offer.toTeam !== "전체공개" ? `→ ${offer.toTeam}` : "→ 전체 공개"} · P2P 거래 제안
-                          </div>
-                          <div style={{ fontWeight: 700, color: G.black, marginBottom: 2 }}>
-                            {offer.stockEmoji} {offer.stockName}
-                          </div>
-                          <div style={{ color: G.gray1, marginBottom: 6 }}>
-                            {offer.qty}주 × {fmt(offer.price)} = {fmt(offer.price * offer.qty)}
-                          </div>
-                          {isPending && (
-                            <div style={{ display: "flex", gap: 6 }}>
-                              {canAccept && (
-                                <div onClick={() => acceptTrade(offer)}
-                                  style={{ flex: 1, background: G.blue, color: G.white, borderRadius: 8,
-                                    padding: "6px 0", textAlign: "center", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>
-                                  ✓ 수락
-                                </div>
-                              )}
-                              {canCancel && (
-                                <div onClick={() => cancelTrade(offer.id)}
-                                  style={{ flex: 1, background: G.redLight, color: G.red, borderRadius: 8,
-                                    padding: "6px 0", textAlign: "center", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>
-                                  취소
-                                </div>
-                              )}
-                              {!canAccept && !canCancel && (
-                                <div style={{ fontSize: 11, color: G.gray2 }}>
-                                  {offer.toTeam !== "전체공개" && offer.toTeam !== teamName ? "나에게 온 제안 아님" : "대기 중..."}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {!isPending && (
-                            <div style={{ fontSize: 11, fontWeight: 600,
-                              color: offer.status === "accepted" ? G.green : G.gray2 }}>
-                              {offer.status === "accepted" ? "✓ 거래 완료" : "✗ 취소됨"}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }
+                  if (msg.type === "trade") return null;
 
                   return (
                     <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
@@ -4931,91 +4781,12 @@ function UserApp({previewAs=null,onBack=null}){
                 })}
                 <div ref={chatBottomRef} />
               </div>
-              {showTradeForm && (
-                <div style={{ padding: "10px 12px", borderTop: `1px solid ${G.border}`, background: G.bg }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: G.black, marginBottom: 8 }}>📤 거래 제안</div>
-                  <div style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 10, color: G.gray2, marginBottom: 3 }}>종목</div>
-                    <select value={tradeStock} onChange={e => {
-                      setTradeStock(e.target.value);
-                      const st = shared.stocks?.find(x => x.id === e.target.value);
-                      if (st) setTradePrice(getCurrentPrice(st, Math.max(shared.round, 1), shared.roundStartedAt, shared.roundEndsAt, shared.activeEvent, shared.modifiedTargets, shared.eventSnapshots, shared.phase));
-                    }} style={{ width: "100%", border: `1.5px solid ${G.border}`, borderRadius: 8,
-                      padding: "7px 10px", fontSize: 12, fontFamily: "inherit", outline: "none", background: G.white }}>
-                      <option value="">선택...</option>
-                      {(shared.stocks || []).filter(st => (holdings[st.id]?.qty || 0) > 0).map(st => (
-                        <option key={st.id} value={st.id}>{st.emoji} {st.name} (보유 {holdings[st.id]?.qty}주)</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: G.gray2, marginBottom: 3 }}>수량</div>
-                      <input type="number" value={tradeQty} min={1}
-                        onFocus={e=>e.target.select()}
-                        onKeyDown={e=>{
-                          if(String(tradeQty)==="1"&&e.key>="0"&&e.key<="9"){
-                            e.preventDefault();
-                            setTradeQty(parseInt(e.key)||1);
-                          }
-                        }}
-                        onChange={e => setTradeQty(parseInt(e.target.value) || 1)}
-                        style={{ width: "100%", border: `1.5px solid ${G.border}`, borderRadius: 8,
-                          padding: "7px 8px", fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}/>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: G.gray2, marginBottom: 3 }}>희망가 (원/주)</div>
-                      <input type="number" value={tradePrice} min={1}
-                        onFocus={e=>e.target.select()}
-                        onKeyDown={e=>{
-                          if(String(tradePrice)==="0"&&e.key>="0"&&e.key<="9"){
-                            e.preventDefault();
-                            setTradePrice(parseInt(e.key)||0);
-                          }
-                        }}
-                        onChange={e => setTradePrice(parseInt(e.target.value) || 0)}
-                        style={{ width: "100%", border: `1.5px solid ${G.border}`, borderRadius: 8,
-                          padding: "7px 8px", fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}/>
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 10, color: G.gray2, marginBottom: 3 }}>대상 팀</div>
-                    <select value={tradeTo} onChange={e => setTradeTo(e.target.value)}
-                      style={{ width: "100%", border: `1.5px solid ${G.border}`, borderRadius: 8,
-                        padding: "7px 10px", fontSize: 12, fontFamily: "inherit", outline: "none", background: G.white }}>
-                      <option value="전체공개">전체 공개</option>
-                      {Object.values(shared.teams || {})
-                        .filter(t => t.name !== teamName)
-                        .map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <div onClick={() => setShowTradeForm(false)}
-                      style={{ flex: 1, background: G.bg, border: `1px solid ${G.border}`, color: G.gray1,
-                        borderRadius: 8, padding: "7px 0", textAlign: "center", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                      취소
-                    </div>
-                    <div onClick={sendTradeOffer}
-                      style={{ flex: 2, background: G.blue, color: G.white,
-                        borderRadius: 8, padding: "7px 0", textAlign: "center", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
-                      제안 올리기
-                    </div>
-                  </div>
-                </div>
-              )}
               <div style={{
                 padding: "10px 12px",
                 borderTop: `1px solid ${G.border}`,
                 display: "flex", gap: 8, flexShrink: 0,
                 background: G.white,
               }}>
-                <div onClick={() => setShowTradeForm(f => !f)}
-                  style={{ width: 36, height: 36, borderRadius: 10, background: G.yellowLight,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", fontSize: 16, flexShrink: 0, border: `1px solid ${G.yellow}` }}
-                  title="주식 거래 제안">
-                  🔄
-                </div>
                 <input
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
