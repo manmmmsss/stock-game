@@ -5104,9 +5104,9 @@ export default function App(){
   return(
     <div style={{...WRAP,background:"#000",display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-      {/* 배경 이미지 (상단 65% 영역, 불투명도 80%) */}
-      <div style={{position:"absolute",top:0,left:0,right:0,height:"65%",
-        backgroundImage:`url(${bgImage})`,backgroundSize:"cover",backgroundPosition:"center top",
+      {/* 배경 이미지 (화면 꽉 채움, 불투명도 80%) */}
+      <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,
+        backgroundImage:`url(${bgImage})`,backgroundSize:"auto 100%",backgroundPosition:"center top",backgroundRepeat:"no-repeat",
         opacity:0.8}}/>
       {/* 아래로 검정 페이드 오버레이 */}
       <div style={{position:"absolute",top:"40%",left:0,right:0,bottom:0,
