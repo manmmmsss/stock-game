@@ -5085,6 +5085,23 @@ export default function App(){
     } catch(e){}
     return false;
   });
+  const shared=useShared();
+  const [showLoginModal,setShowLoginModal]=useState(false);
+  const [modalName,setModalName]=useState("");
+  const [modalPw,setModalPw]=useState("");
+  const [modalErr,setModalErr]=useState("");
+
+  const closeModal=()=>{setShowLoginModal(false);setModalName("");setModalPw("");setModalErr("");};
+  const doModalLogin=()=>{
+    const name=modalName.trim(),pw=modalPw.trim();
+    if(!name||!pw){setModalErr("이름과 비밀번호를 입력해주세요");return;}
+    const cred=shared.teamCredentials?.[name];
+    if(!cred){setModalErr("등록되지 않은 이름입니다");return;}
+    if(cred.pw!==pw){setModalErr("비밀번호가 올바르지 않습니다");return;}
+    try{localStorage.setItem('sg_session',JSON.stringify({id:cred.id,name,ts:Date.now()}));}catch(e){}
+    closeModal();
+    setMode("user");
+  };
 
   useEffect(()=>{
     if(mode==="admin"&&!auth){
@@ -5121,7 +5138,7 @@ export default function App(){
       </div>
       {/* 버튼: 하단 고정 */}
       <div style={{position:"relative",zIndex:1,width:"100%",padding:"0 32px 48px"}}>
-        <button onClick={()=>setMode("user")}
+        <button onClick={()=>setShowLoginModal(true)}
           style={{background:"#fff",color:"#000",border:"none",
             borderRadius:14,padding:"17px 0",fontSize:17,fontWeight:700,cursor:"pointer",
             fontFamily:"inherit",textAlign:"center",width:"100%",
@@ -5141,6 +5158,48 @@ export default function App(){
           </button>
         </div>
       </div>
+      {/* 로그인 모달 */}
+      {showLoginModal&&(
+        <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.55)",
+          display:"flex",alignItems:"flex-end",backdropFilter:"blur(3px)"}}
+          onClick={closeModal}>
+          <div style={{background:"#fff",borderRadius:"24px 24px 0 0",
+            padding:"12px 24px 48px",width:"100%",maxWidth:"430px",margin:"0 auto"}}
+            onClick={e=>e.stopPropagation()}>
+            {/* 상단 바 + X */}
+            <div style={{display:"flex",justifyContent:"flex-end",paddingTop:8,marginBottom:16}}>
+              <button onClick={closeModal}
+                style={{background:"none",border:"none",cursor:"pointer",
+                  fontSize:20,color:"#aaa",lineHeight:1,padding:"4px 6px"}}>✕</button>
+            </div>
+            {/* 이름 */}
+            <div style={{marginBottom:12}}>
+              <input value={modalName} onChange={e=>{setModalName(e.target.value);setModalErr("");}}
+                placeholder="이름" onKeyDown={e=>e.key==="Enter"&&doModalLogin()}
+                style={{width:"100%",border:`1.5px solid ${modalErr?"#e53935":"#e0e0e0"}`,
+                  borderRadius:12,padding:"14px 16px",fontSize:15,fontFamily:"inherit",
+                  outline:"none",color:"#111",boxSizing:"border-box"}}/>
+            </div>
+            {/* 비밀번호 */}
+            <div style={{marginBottom:16}}>
+              <input type="password" value={modalPw} onChange={e=>{setModalPw(e.target.value);setModalErr("");}}
+                placeholder="비밀번호" onKeyDown={e=>e.key==="Enter"&&doModalLogin()}
+                style={{width:"100%",border:`1.5px solid ${modalErr?"#e53935":"#e0e0e0"}`,
+                  borderRadius:12,padding:"14px 16px",fontSize:15,fontFamily:"inherit",
+                  outline:"none",color:"#111",boxSizing:"border-box"}}/>
+            </div>
+            {modalErr&&<div style={{fontSize:13,color:"#e53935",marginBottom:12,
+              padding:"10px 12px",background:"#ffebee",borderRadius:8}}>{modalErr}</div>}
+            {/* 게임 입장 버튼 */}
+            <button onClick={doModalLogin}
+              style={{width:"100%",background:"#111",color:"#fff",border:"none",
+                borderRadius:12,padding:"16px",fontSize:16,fontWeight:700,
+                cursor:"pointer",fontFamily:"inherit"}}>
+              게임 입장
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
