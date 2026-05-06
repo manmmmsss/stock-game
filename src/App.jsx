@@ -2004,7 +2004,16 @@ function AdminApp({onBack=null}){
     setInitCash(nextInitCash);
     setTeamCashMode(tpl.teamCashMode || false);
     setTeamCash(tpl.teamCash || 0);
-    setGroupCash(tpl.groupCash || {});
+    // 조 단위 자금 모드: 기존 등록 조에 teamCash 자동 채움
+    {
+      const autoGC={...(tpl.groupCash||{})};
+      if(tpl.teamCashMode&&tpl.teamCash>0){
+        for(const cred of Object.values(shared.teamCredentials||{})){
+          if(cred.groupName&&!autoGC[cred.groupName]) autoGC[cred.groupName]=tpl.teamCash;
+        }
+      }
+      setGroupCash(autoGC);
+    }
     setFeeRate(tpl.feeRate ?? 0.1);
     setLeverageEnabled(tpl.leverageEnabled ?? false);
     setLeverageMax(tpl.leverageMax ?? 2);
@@ -2025,7 +2034,15 @@ function AdminApp({onBack=null}){
       initCash: nextInitCash,
       teamCashMode: tpl.teamCashMode || false,
       teamCash: tpl.teamCash || 0,
-      groupCash: tpl.groupCash || {},
+      groupCash: (()=>{
+        const gc={...(tpl.groupCash||{})};
+        if(tpl.teamCashMode&&tpl.teamCash>0){
+          for(const cred of Object.values(ss.teamCredentials||{})){
+            if(cred.groupName&&!gc[cred.groupName]) gc[cred.groupName]=tpl.teamCash;
+          }
+        }
+        return gc;
+      })(),
       feeRate: tpl.feeRate ?? 0.1,
       leverageEnabled: tpl.leverageEnabled ?? false,
       leverageMax: tpl.leverageMax ?? 2,
@@ -2038,7 +2055,7 @@ function AdminApp({onBack=null}){
       minBet: tpl.betMinAmount ?? 100000,
       maxBetPct: tpl.betMaxRatio ?? 50,
       betWindow: tpl.betDuration ?? 30,
-      teams: buildFreshTeamsFromCreds(ss.teamCredentials || {}, ss.teams || {}, nextInitCash, tpl.teamCashMode || false, tpl.teamCash || 0, tpl.groupCash || {}),
+      teams: buildFreshTeamsFromCreds(ss.teamCredentials || {}, ss.teams || {}, nextInitCash, tpl.teamCashMode || false, tpl.teamCash || 0, (()=>{const gc={...(tpl.groupCash||{})};if(tpl.teamCashMode&&tpl.teamCash>0){for(const c of Object.values(ss.teamCredentials||{})){if(c.groupName&&!gc[c.groupName])gc[c.groupName]=tpl.teamCash;}}return gc;})()),
       phase: "ready",
       round: 0,
       roundStartedAt: null,
@@ -3518,8 +3535,9 @@ function AdminApp({onBack=null}){
                         <div style={{fontSize:13,fontWeight:700,color:G.black,minWidth:42}}>{g}</div>
                         <div style={{fontSize:11,color:G.gray2,minWidth:28}}>{cnt}명</div>
                         <NumInput
-                          value={shared.groupCash?.[g]||""}
-                          placeholder={String(shared.teamCash||shared.initCash||"")}
+                          value={shared.groupCash?.[g]>0
+                            ? shared.groupCash[g]
+                            : (shared.teamCashMode&&shared.teamCash>0 ? shared.teamCash : "")}
                           onChange={e=>{
                             const v=parseInt(e.target.value)||0;
                             const next={...(shared.groupCash||{})};
