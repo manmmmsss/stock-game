@@ -2142,6 +2142,21 @@ function AdminApp({onBack=null}){
   };
 
   // 팀 계정
+  // 그룹 전체 자금 ÷ 인원 수 → 전원 cash/initCash 재계산
+  const rebalGroupCash=(s,groupName,updatedCreds,updatedTeams)=>{
+    const total=(s.groupCash?.[groupName]>0?s.groupCash[groupName]:null)
+      ??(s.teamCash>0?s.teamCash:null);
+    if(!total||total<=0) return updatedTeams;
+    const members=Object.values(updatedCreds||{}).filter(c=>c.groupName===groupName);
+    if(members.length===0) return updatedTeams;
+    const pp=Math.floor(total/members.length);
+    const teams={...updatedTeams};
+    members.forEach(cred=>{
+      if(teams[cred.id]) teams[cred.id]={...teams[cred.id],cash:pp,initCash:pp};
+    });
+    return teams;
+  };
+
   const addMember=()=>{
     const group=newGroupName;
     const names=newMemberName.split(/[\n,，]+/).map(s=>s.trim()).filter(Boolean);
@@ -2156,16 +2171,20 @@ function AdminApp({onBack=null}){
         holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0};
       newIds.push(id);
     });
-    setShared(s=>({
-      ...s,
-      teamCredentials:{...(s.teamCredentials||{}),...newCreds},
-      teams:{...s.teams,...newTeams},
-      groups:{...(s.groups||{}),[group]:{
-        ...(s.groups?.[group]||{}),
-        diamonds:(s.groups?.[group]?.diamonds||0),
-        memberIds:[...(s.groups?.[group]?.memberIds||[]),...newIds],
-      }},
-    }));
+    setShared(s=>{
+      const updatedCreds={...(s.teamCredentials||{}),...newCreds};
+      const updatedTeams=rebalGroupCash(s,group,updatedCreds,{...s.teams,...newTeams});
+      return{
+        ...s,
+        teamCredentials:updatedCreds,
+        teams:updatedTeams,
+        groups:{...(s.groups||{}),[group]:{
+          ...(s.groups?.[group]||{}),
+          diamonds:(s.groups?.[group]?.diamonds||0),
+          memberIds:[...(s.groups?.[group]?.memberIds||[]),...newIds],
+        }},
+      };
+    });
     setNewMemberName("");
     t2(`${group} - ${names.length}명 등록 완료`);
   };
@@ -2182,27 +2201,23 @@ function AdminApp({onBack=null}){
       if(shared.teamCredentials?.[name]) continue;
       const id=uid();
       newCreds[name]={id,groupName:group};
-      let bCash=shared.initCash||DEFAULT_INIT_CASH;
-      if(shared.teamCashMode&&group){
-        const gTotal=(shared.groupCash?.[group]>0?shared.groupCash[group]:null)??(shared.teamCash>0?shared.teamCash:null);
-        if(gTotal>0){
-          const existCount=Object.values(shared.teamCredentials||{}).filter(c=>c.groupName===group).length;
-          bCash=Math.floor(gTotal/(existCount+count));
-        }
-      }
-      newTeams[id]={name,groupName:group,cash:bCash,
+      newTeams[id]={name,groupName:group,cash:0,
         holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0};
       newMemberIds.push(id);
     }
-    setShared(s=>({
-      ...s,
-      teamCredentials:{...(s.teamCredentials||{}),...newCreds},
-      teams:{...s.teams,...newTeams},
-      groups:{...(s.groups||{}),[group]:{
-        diamonds:(s.groups?.[group]?.diamonds||0),
-        memberIds:[...(s.groups?.[group]?.memberIds||[]),...newMemberIds],
-      }},
-    }));
+    setShared(s=>{
+      const updatedCreds={...(s.teamCredentials||{}),...newCreds};
+      const updatedTeams=rebalGroupCash(s,group,updatedCreds,{...s.teams,...newTeams});
+      return{
+        ...s,
+        teamCredentials:updatedCreds,
+        teams:updatedTeams,
+        groups:{...(s.groups||{}),[group]:{
+          diamonds:(s.groups?.[group]?.diamonds||0),
+          memberIds:[...(s.groups?.[group]?.memberIds||[]),...newMemberIds],
+        }},
+      };
+    });
     t2(`${group} ${count}명 일괄 등록 완료`);
   };
 
@@ -2223,7 +2238,8 @@ function AdminApp({onBack=null}){
       }
       const teams={...s.teams};
       delete teams[id];
-      return{...s,teamCredentials:creds,teams,groups:grp};
+      const rebalancedTeams=rebalGroupCash(s,group,creds,teams);
+      return{...s,teamCredentials:creds,teams:rebalancedTeams,groups:grp};
     });
   };
 
