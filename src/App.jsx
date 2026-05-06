@@ -474,17 +474,17 @@ const BUILT_IN_TEMPLATES = [
     ],
     eventPresets:[
       {id:"e1",name:"1R 호재 확정 - A 엔터",emoji:"🏆",desc:"A엔터 연예인 MJJ 빌보드 1위 등극 후 세계에서 가장 영향력 있는 인물로 선정",globalEffect:0,stockEffects:{s1:18},note:"1라운드 대표 호재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true,triggerAtRound:1,triggerAtSecond:240},
-      {id:"e2",name:"1R 치명 악재 - H 뷰티",emoji:"☣️",desc:"H뷰티 화장품 파우더에서 1급 발암물질인 석면 검출",globalEffect:0,stockEffects:{s8:-28},note:"1라운드 대표 악재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
+      {id:"e2",name:"1R 치명 악재 - H 뷰티",emoji:"☣️",desc:"H뷰티 화장품 파우더에서 1급 발암물질인 석면 검출",globalEffect:0,stockEffects:{s8:-28},note:"1라운드 대표 악재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true,triggerAtRound:1,triggerAtSecond:90},
       {id:"e3",name:"1R 황당 찌라시 - G 식품",emoji:"🍽️",desc:"공사장 인부들 새참이 떡에서 호빵으로 변경",globalEffect:0,stockEffects:{s7:12},note:"1라운드 찌라시 수혜",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true,triggerAtRound:1,triggerAtSecond:380},
       {id:"e4",name:"2R 호재 확정 - C IT",emoji:"🍎",desc:"C IT, 글로벌 기업 애플과 차세대 자율주행차 핵심 부품 독점 공급 계약 체결",globalEffect:0,stockEffects:{s3:20},note:"폭락장 역주행 호재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true,triggerAtRound:2,triggerAtSecond:240},
       {id:"e5",name:"2R 치명 악재 - I 화학",emoji:"🔋",desc:"I화학, 주력 배터리 제품 대규모 결함 발견으로 전 세계 전량 리콜 결정",globalEffect:0,stockEffects:{s9:-30},note:"2라운드 대표 악재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true,triggerAtRound:2,triggerAtSecond:90},
       {id:"e6",name:"2R 황당 찌라시 - D IT",emoji:"🧭",desc:"D IT 사옥 현관 방향이 풍수지리상 재물이 빠지는 수구 방향이라 정문 이전 공사 예정설",globalEffect:0,stockEffects:{s4:-10},note:"폭락장 속 찌라시 악영향",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true,triggerAtRound:2,triggerAtSecond:380},
-      {id:"e7",name:"3R 호재 확정 - E 바이오",emoji:"💊",desc:"E바이오, 암세포만 골라 죽이는 꿈의 항암제 임상 3상 최종 통과 및 시판 허가",globalEffect:0,stockEffects:{s5:28},note:"3라운드 폭등 재료",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
-      {id:"e8",name:"3R 치명 악재 - J 조선",emoji:"⚓",desc:"J조선, 수주했던 수조 원 규모 초대형 유조선 프로젝트 계약 상대측 파산으로 전격 취소",globalEffect:0,stockEffects:{s10:-26},note:"3라운드 대폭락 재료",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
-      {id:"e9",name:"3R 황당 찌라시 - G 식품",emoji:"🔴",desc:"G식품 회장님이 꿈에서 조상님 계시를 받아 모든 로고·포장지를 내일부터 빨간색으로 변경 예정",globalEffect:0,stockEffects:{s7:10},note:"3라운드 찌라시 재등장",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true},
+      {id:"e7",name:"3R 호재 확정 - E 바이오",emoji:"💊",desc:"E바이오, 암세포만 골라 죽이는 꿈의 항암제 임상 3상 최종 통과 및 시판 허가",globalEffect:0,stockEffects:{s5:28},note:"3라운드 폭등 재료",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true,triggerAtRound:3,triggerAtSecond:240},
+      {id:"e8",name:"3R 치명 악재 - J 조선",emoji:"⚓",desc:"J조선, 수주했던 수조 원 규모 초대형 유조선 프로젝트 계약 상대측 파산으로 전격 취소",globalEffect:0,stockEffects:{s10:-26},note:"3라운드 대폭락 재료",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true,triggerAtRound:3,triggerAtSecond:90},
+      {id:"e9",name:"3R 황당 찌라시 - G 식품",emoji:"🔴",desc:"G식품 회장님이 꿈에서 조상님 계시를 받아 모든 로고·포장지를 내일부터 빨간색으로 변경 예정",globalEffect:0,stockEffects:{s7:10},note:"3라운드 찌라시 재등장",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true,triggerAtRound:3,triggerAtSecond:380},
     ],
     rules:`📌 기본 설정
-• 시작 자금: 50만 원
+• 시작 자금: 조당 1,300만원 (조원 100만원, 조장 차액 지급)
 • 총 3라운드 (라운드당 매매 10분)
 • 수수료: 매수·매도 각 0.1%
 
