@@ -2822,47 +2822,9 @@ function AdminApp({onBack=null}){
                     <NumInput value={teamCash} onChange={e=>{const v=parseInt(e.target.value)||0;setTeamCash(v);setShared(s=>({...s,teamCash:v}));}}/>
                   </div>
                 </div>
-                <div style={{fontSize:11,color:G.blue,marginTop:6,marginBottom:8}}>
-                  ※ 4인 팀→1인당 {fmt(Math.floor(teamCash/4))} · 5인 팀→{fmt(Math.floor(teamCash/5))}
+                <div style={{fontSize:11,color:G.blue,marginTop:6}}>
+                  ※ 조별 개별 설정은 [팀] 탭에서 가능
                 </div>
-                {/* 조별 개별 자금 설정 */}
-                {(()=>{
-                  const credVals=Object.values(shared.teamCredentials||{});
-                  const gNames=[...new Set(credVals.map(c=>c.groupName).filter(Boolean))].sort();
-                  const mCnt={};
-                  credVals.forEach(c=>{if(c.groupName)mCnt[c.groupName]=(mCnt[c.groupName]||0)+1;});
-                  if(gNames.length===0) return null;
-                  return(
-                    <div style={{borderTop:`1px solid ${G.border}`,paddingTop:8}}>
-                      <div style={{fontSize:11,fontWeight:700,color:G.black,marginBottom:6}}>조별 개별 자금 설정</div>
-                      <div style={{fontSize:10,color:G.gray2,marginBottom:8}}>비워두면 위 기본값 적용</div>
-                      {gNames.map(g=>{
-                        const cnt=mCnt[g]||1;
-                        const thisTotal=groupCash[g]>0?groupCash[g]:null;
-                        return(
-                          <div key={g} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-                            <div style={{fontSize:12,fontWeight:700,color:G.black,minWidth:46}}>{g}</div>
-                            <NumInput
-                              value={groupCash[g]||""}
-                              placeholder={String(teamCash||"")}
-                              onChange={e=>{
-                                const v=parseInt(e.target.value)||0;
-                                const next={...groupCash};
-                                if(v>0) next[g]=v; else delete next[g];
-                                setGroupCash(next);
-                                setShared(s=>({...s,groupCash:next}));
-                              }}
-                              style={{flex:1}}
-                            />
-                            <div style={{fontSize:10,color:G.blue,minWidth:90,textAlign:"right"}}>
-                              {thisTotal!=null?`÷${cnt}=${fmt(Math.floor(thisTotal/cnt))}`:cnt>0?`÷${cnt}=${fmt(Math.floor((teamCash||0)/cnt))}`:null}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
               </div>
             ):(
               <div style={{marginTop:8}}>
@@ -3499,6 +3461,89 @@ function AdminApp({onBack=null}){
                 style={{flexShrink:0,padding:"8px 12px",fontSize:12}}>등록</Btn>
             </div>
             <div style={{fontSize:11,color:G.blue}}>예) 1조 5명 → 1조-1 ~ 1조-5 자동 생성</div>
+          </div>
+
+          {/* 💰 조별 시작자금 설정 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:4}}>💰 조별 시작자금 설정</div>
+            <div style={{fontSize:11,color:G.gray2,marginBottom:10}}>팀 전체 자금 ÷ 팀원 수 = 1인당 시작자금 · [적용] 버튼으로 즉시 반영</div>
+            {(()=>{
+              const credVals=Object.values(shared.teamCredentials||{});
+              const gNames=[...new Set(credVals.map(c=>c.groupName).filter(Boolean))].sort();
+              const mCnt={};
+              credVals.forEach(c=>{if(c.groupName)mCnt[c.groupName]=(mCnt[c.groupName]||0)+1;});
+              if(gNames.length===0) return(
+                <div style={{fontSize:11,color:G.gray2,textAlign:"center",padding:"10px 0"}}>등록된 조가 없습니다</div>
+              );
+              const applyOne=(gName)=>{
+                setShared(s=>{
+                  const teams={...s.teams};
+                  const total=(s.groupCash?.[gName]>0?s.groupCash[gName]:null)??(s.teamCash>0?s.teamCash:null)??(s.initCash||DEFAULT_INIT_CASH);
+                  const cnt=Object.values(s.teamCredentials||{}).filter(c=>c.groupName===gName).length||1;
+                  const pp=Math.floor(total/cnt);
+                  Object.values(s.teamCredentials||{}).forEach(cred=>{
+                    if(cred.groupName!==gName) return;
+                    if(teams[cred.id]) teams[cred.id]={...teams[cred.id],cash:pp,initCash:pp};
+                  });
+                  return{...s,teams};
+                });
+                t2(`${gName} 시작자금 적용 완료`);
+              };
+              const applyAll=()=>{
+                setShared(s=>{
+                  const teams={...s.teams};
+                  const allG=[...new Set(Object.values(s.teamCredentials||{}).map(c=>c.groupName).filter(Boolean))];
+                  allG.forEach(gName=>{
+                    const total=(s.groupCash?.[gName]>0?s.groupCash[gName]:null)??(s.teamCash>0?s.teamCash:null)??(s.initCash||DEFAULT_INIT_CASH);
+                    const cnt=Object.values(s.teamCredentials||{}).filter(c=>c.groupName===gName).length||1;
+                    const pp=Math.floor(total/cnt);
+                    Object.values(s.teamCredentials||{}).forEach(cred=>{
+                      if(cred.groupName!==gName) return;
+                      if(teams[cred.id]) teams[cred.id]={...teams[cred.id],cash:pp,initCash:pp};
+                    });
+                  });
+                  return{...s,teams};
+                });
+                t2("전체 조 시작자금 적용 완료");
+              };
+              return(
+                <div>
+                  {gNames.map(g=>{
+                    const cnt=mCnt[g]||1;
+                    const gVal=shared.groupCash?.[g]>0?shared.groupCash[g]:null;
+                    const effective=gVal??(shared.teamCash>0?shared.teamCash:null)??(shared.initCash||DEFAULT_INIT_CASH);
+                    return(
+                      <div key={g} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,
+                        padding:"10px 10px",background:G.bg,borderRadius:10}}>
+                        <div style={{fontSize:13,fontWeight:700,color:G.black,minWidth:42}}>{g}</div>
+                        <div style={{fontSize:11,color:G.gray2,minWidth:28}}>{cnt}명</div>
+                        <NumInput
+                          value={shared.groupCash?.[g]||""}
+                          placeholder={String(shared.teamCash||shared.initCash||"")}
+                          onChange={e=>{
+                            const v=parseInt(e.target.value)||0;
+                            const next={...(shared.groupCash||{})};
+                            if(v>0) next[g]=v; else delete next[g];
+                            setGroupCash(next);
+                            setShared(s=>({...s,groupCash:next}));
+                          }}
+                          style={{flex:1}}
+                        />
+                        <div style={{fontSize:10,color:G.blue,minWidth:88,textAlign:"right"}}>
+                          ÷{cnt}={fmt(Math.floor(effective/cnt))}
+                        </div>
+                        <Btn onClick={()=>applyOne(g)} color={G.green} textColor={G.white}
+                          style={{padding:"7px 10px",fontSize:11,flexShrink:0}}>적용</Btn>
+                      </div>
+                    );
+                  })}
+                  <Btn onClick={applyAll} color={G.blue} textColor={G.white}
+                    style={{width:"100%",padding:"9px",fontSize:12,marginTop:2}}>
+                    전체 조 시작자금 일괄 적용
+                  </Btn>
+                </div>
+              );
+            })()}
           </div>
 
           {/* 조별 다이아 지급 */}
