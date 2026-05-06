@@ -2507,7 +2507,6 @@ function AdminApp({onBack=null}){
                   </div>
                   <div style={{flex:1,fontSize:12,fontWeight:600,color:G.black}}>
                     R{r} <span style={{fontSize:11,color:G.gray1,fontWeight:400}}>({rc?.durationMin||5}분)</span>
-                    {rc?.blind&&<span style={{fontSize:10,color:G.purple,background:G.purpleLight,borderRadius:3,padding:"1px 4px",marginLeft:4}}>블라인드</span>}
                   </div>
                   <Btn onClick={()=>startRound(r)} color={isActive?G.green:G.blue} style={{padding:"6px 12px",fontSize:11}}>
                     {isActive?"진행중":shared.round>r?"재시작":"시작"}
@@ -2551,34 +2550,11 @@ function AdminApp({onBack=null}){
           {/* 💰 시작 자금 설정 */}
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💰 시작 자금 설정</div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:teamCashMode?10:0}}>
-              <div>
-                <div style={{fontSize:12,fontWeight:600,color:G.black}}>팀 공유 자금</div>
-                <div style={{fontSize:11,color:G.gray1}}>팀 전체 자금 ÷ 팀원 수 = 1인당 자금</div>
-              </div>
-              <div onClick={()=>{setTeamCashMode(v=>!v);setShared(s=>({...s,teamCashMode:!s.teamCashMode}));}}
-                style={{width:40,height:22,borderRadius:11,background:teamCashMode?G.blue:G.gray3,position:"relative",cursor:"pointer",transition:"background .2s"}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:G.white,position:"absolute",top:2,left:teamCashMode?20:2,transition:"left .2s"}}/>
-              </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>기본 팀당 자금 (원)</div>
+              <NumInput value={teamCash} onChange={e=>{const v=parseInt(e.target.value)||0;setTeamCash(v);setShared(s=>({...s,teamCash:v}));}}/>
             </div>
-            {teamCashMode?(
-              <div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>기본 팀당 자금 (원)</div>
-                    <NumInput value={teamCash} onChange={e=>{const v=parseInt(e.target.value)||0;setTeamCash(v);setShared(s=>({...s,teamCash:v}));}}/>
-                  </div>
-                </div>
-                <div style={{fontSize:11,color:G.blue,marginTop:6}}>
-                  ※ 조별 개별 설정은 [팀] 탭에서 가능
-                </div>
-              </div>
-            ):(
-              <div style={{marginTop:8}}>
-                <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>개인 시작 자금 (원)</div>
-                <NumInput value={initCash} onChange={e=>{const v=parseInt(e.target.value)||0;setInitCash(v);setShared(s=>({...s,initCash:v}));}}/>
-              </div>
-            )}
+            <div style={{fontSize:11,color:G.blue,marginTop:6}}>※ 조별 개별 설정은 [팀] 탭에서 가능</div>
           </div>
 
           {/* 🔔 현재 이벤트 */}
@@ -2764,49 +2740,22 @@ function AdminApp({onBack=null}){
 
           {/* 템플릿 */}
           {settingsTab==="template"&&<>
-            <div style={{background:G.blueLight,borderRadius:12,padding:"10px 14px",marginBottom:10,fontSize:12,color:G.blue,lineHeight:1.6}}>
-              💡 템플릿을 선택하면 종목·라운드·수수료 등 전체 설정이 한 번에 적용됩니다
-            </div>
             {allTemplates.map(tpl=>(
               <div key={tpl.id} style={{background:G.white,borderRadius:14,padding:14,marginBottom:8}}>
-                {editingTpl===tpl.id&&!tpl.builtIn?(
-                  <div>
-                    <div style={{display:"flex",gap:8,marginBottom:8}}>
-                      <TextInput value={tpl.name} onChange={e=>updateCustomTpl(tpl.id,"name",e.target.value)} style={{flex:1}}/>
-                      <Btn onClick={()=>setEditingTpl(null)} color={G.bg} textColor={G.gray1} style={{padding:"8px 12px",fontSize:12}}>완료</Btn>
-                    </div>
-                    <TextInput value={tpl.desc||""} onChange={e=>updateCustomTpl(tpl.id,"desc",e.target.value)} placeholder="설명"/>
-                  </div>
-                ):(
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:14,fontWeight:700,color:G.black,marginBottom:3}}>{tpl.name}</div>
-                      <div style={{fontSize:12,color:G.gray1,marginBottom:6}}>{tpl.desc}</div>
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                        {[`${tpl.maxRound}라운드`,`${fmt(tpl.initCash)}`,`수수료 ${tpl.feeRate}%`,
-                          tpl.leverageEnabled?`레버리지 x${tpl.leverageMax}`:"레버리지 없음"].map(tag=>(
-                          <span key={tag} style={{fontSize:10,background:G.bg,borderRadius:4,padding:"2px 6px",color:G.gray1}}>{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:8}}>
-                      {!tpl.builtIn&&<>
-                        <Btn onClick={()=>setEditingTpl(tpl.id)} color={G.bg} textColor={G.gray1} style={{padding:"6px 10px",fontSize:11}}>수정</Btn>
-                        <Btn onClick={()=>delCustomTpl(tpl.id)} color={G.redLight} textColor={G.red} style={{padding:"6px 10px",fontSize:11}}>삭제</Btn>
-                      </>}
-                      <Btn onClick={()=>applyTemplate(tpl)} color={G.blue} style={{padding:"6px 12px",fontSize:12}}>적용</Btn>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:G.black,marginBottom:3}}>{tpl.name}</div>
+                    <div style={{fontSize:12,color:G.gray1,marginBottom:6}}>{tpl.desc}</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {[`${tpl.maxRound}라운드`,`수수료 ${tpl.feeRate}%`,`조당 ${fmt(tpl.teamCash||tpl.initCash)}`].map(tag=>(
+                        <span key={tag} style={{fontSize:10,background:G.bg,borderRadius:4,padding:"2px 6px",color:G.gray1}}>{tag}</span>
+                      ))}
                     </div>
                   </div>
-                )}
+                  <Btn onClick={()=>applyTemplate(tpl)} color={G.blue} style={{padding:"6px 12px",fontSize:12,flexShrink:0,marginLeft:8}}>적용</Btn>
+                </div>
               </div>
             ))}
-            <div style={{background:G.white,borderRadius:14,padding:14,marginTop:10}}>
-              <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>현재 설정 저장</div>
-              <div style={{display:"flex",gap:8}}>
-                <TextInput value={saveTplName} onChange={e=>setSaveTplName(e.target.value)} placeholder="템플릿 이름" style={{flex:1}}/>
-                <Btn onClick={saveAsTemplate} color={G.green} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>저장</Btn>
-              </div>
-            </div>
           </>}
 
           {/* 라운드 설정 */}
@@ -2815,42 +2764,13 @@ function AdminApp({onBack=null}){
               <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>게임 기본 설정</div>
               <div style={{display:"flex",gap:8,marginBottom:10}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>시작 자금 (원)</div>
+                  <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>조원 1인당 기본 자금 (원)</div>
                   <NumInput value={initCash} onChange={e=>setInitCash(parseInt(e.target.value)||0)}/>
                 </div>
-                <div style={{width:100}}>
-                  <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>라운드 수</div>
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <div onClick={()=>changeMaxRound(maxRound-1)} style={{width:28,height:34,borderRadius:7,border:`1.5px solid ${G.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:16,flexShrink:0}}>−</div>
-                    <div style={{fontSize:16,fontWeight:700,color:G.black,textAlign:"center",minWidth:24}}>{maxRound}</div>
-                    <div onClick={()=>changeMaxRound(maxRound+1)} style={{width:28,height:34,borderRadius:7,border:`1.5px solid ${G.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:16,flexShrink:0}}>+</div>
-                  </div>
-                </div>
-              </div>
-              <div style={{display:"flex",gap:8,marginBottom:10}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,color:G.gray2,marginBottom:4}}>수수료율 (%)</div>
                   <NumInput value={feeRate} onChange={e=>setFeeRate(parseFloat(e.target.value)||0)} style={{textAlign:"left"}}/>
                 </div>
-              </div>
-              <div style={{background:G.bg,borderRadius:10,padding:"10px 12px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:leverageEnabled?8:0}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600,color:G.black}}>레버리지 투자</div>
-                    <div style={{fontSize:11,color:G.gray1}}>보유 현금의 최대 N배 투자 가능</div>
-                  </div>
-                  <div onClick={()=>setLeverageEnabled(v=>!v)}
-                    style={{width:44,height:26,borderRadius:13,background:leverageEnabled?G.blue:G.gray3,
-                      position:"relative",cursor:"pointer",transition:"background .2s"}}>
-                    <div style={{width:22,height:22,borderRadius:"50%",background:G.white,position:"absolute",
-                      top:2,left:leverageEnabled?20:2,transition:"left .2s"}}/>
-                  </div>
-                </div>
-                {leverageEnabled&&<div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:12,color:G.gray1}}>최대 배수</span>
-                  <NumInput value={leverageMax} onChange={e=>setLeverageMax(parseInt(e.target.value)||2)} style={{width:64}}/>
-                  <span style={{fontSize:12,color:G.gray1}}>배</span>
-                </div>}
               </div>
             </div>
 
@@ -2922,34 +2842,10 @@ function AdminApp({onBack=null}){
             <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
               <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>라운드별 설정</div>
               {rounds.map((r,i)=>(
-                <div key={r.id} style={{marginBottom:16,paddingBottom:16,borderBottom:i<rounds.length-1?`1px solid ${G.border}`:"none"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                    <div style={{fontSize:13,fontWeight:700,color:G.black,minWidth:32}}>R{i+1}</div>
-                    <NumInput value={r.durationMin} onChange={e=>updRound(r.id,"durationMin",parseInt(e.target.value)||1)} style={{width:60}}/>
-                    <span style={{fontSize:12,color:G.gray1}}>분</span>
-                    <div onClick={()=>updRound(r.id,"blind",!r.blind)}
-                      style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,cursor:"pointer",
-                        background:r.blind?G.purpleLight:G.bg,borderRadius:8,padding:"4px 10px"}}>
-                      <span style={{fontSize:11,color:r.blind?G.purple:G.gray2,fontWeight:600}}>🙈 블라인드</span>
-                      <div style={{width:32,height:18,borderRadius:9,background:r.blind?G.purple:G.gray3,position:"relative"}}>
-                        <div style={{width:14,height:14,borderRadius:"50%",background:G.white,position:"absolute",top:2,left:r.blind?16:2,transition:"left .2s"}}/>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:11,color:G.green,fontWeight:600,marginBottom:6}}>💰 배당금 설정 (주당 지급액)</div>
-                    {stocks.map(s=>{
-                      const val=r.dividends?.[s.id]||0;
-                      return(
-                        <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                          <span style={{fontSize:13,width:100,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.emoji} {s.name}</span>
-                          <NumInput value={val||""} onChange={e=>updDividend(r.id,s.id,e.target.value)} placeholder="0=없음" style={{flex:1,textAlign:"left"}}/>
-                          <span style={{fontSize:11,color:G.gray2,flexShrink:0}}>원/주</span>
-                          {val>0&&<span onClick={()=>clearDividend(r.id,s.id)} style={{fontSize:11,color:G.red,cursor:"pointer",flexShrink:0}}>×</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:i<rounds.length-1?12:0,paddingBottom:i<rounds.length-1?12:0,borderBottom:i<rounds.length-1?`1px solid ${G.border}`:"none"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:G.black,minWidth:32}}>R{i+1}</div>
+                  <NumInput value={r.durationMin} onChange={e=>updRound(r.id,"durationMin",parseInt(e.target.value)||1)} style={{width:60}}/>
+                  <span style={{fontSize:12,color:G.gray1}}>분</span>
                 </div>
               ))}
             </div>
