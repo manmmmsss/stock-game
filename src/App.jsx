@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "./firebase";
 import { ref, onValue, set as fbSet, get } from "firebase/database";
 import bgImage from "./assets/MT_background.png";
-import logoImage from "./assets/MT_logo.png";
+import logoImage from "./assets/MT_logo2.png";
 
 const injectGlobal = () => {
   if (document.getElementById('sg-global')) return;
@@ -422,20 +422,20 @@ const BUILT_IN_TEMPLATES = [
     ],
   },
   {
-    id:"tpl6", name:"🎓 로(路) 공식전 (43분)", builtIn:true,
-    desc:"개인 50만원 시작, 3라운드, 10종목, 베팅+거시/종목 힌트 포함 공식 세팅",
-    initCash:500000, maxRound:3, feeRate:0.1,
+    id:"tpl6", name:"🎓 로(路) 공식전 (37분)", builtIn:true,
+    desc:"팀 1300만원 시작, 3라운드, 10종목, 베팅+거시/종목 힌트 포함 공식 세팅",
+    initCash:1000000, teamCashMode:true, teamCash:13000000, maxRound:3, feeRate:0.1,
     leverageEnabled:false, leverageMax:2,
     betEnabled:true, betBaseOdds:1.8, betDynamic:true,
     betMinAmount:10, betMaxRatio:100, betDuration:180,
     timelineSteps:[
       {id:"bet1",  label:"1라운드 베팅",     type:"betting",duration:180,round:1},
-      {id:"round1",label:"1라운드 매매",     type:"round",  duration:600,round:1},
+      {id:"round1",label:"1라운드 매매",     type:"round",  duration:480,round:1},
       {id:"result1",label:"1라운드 종가",    type:"result", duration:60, round:1},
       {id:"bet2",  label:"2라운드 베팅",     type:"betting",duration:180,round:2},
-      {id:"round2",label:"2라운드 매매",     type:"round",  duration:600,round:2},
+      {id:"round2",label:"2라운드 매매",     type:"round",  duration:480,round:2},
       {id:"result2",label:"2라운드 종가",    type:"result", duration:60, round:2},
-      {id:"round3",label:"3라운드 매매",     type:"round",  duration:600,round:3},
+      {id:"round3",label:"3라운드 매매",     type:"round",  duration:480,round:3},
       {id:"result3",label:"최종 결과",       type:"result", duration:300,round:3},
     ],
     rounds:[
@@ -452,6 +452,7 @@ const BUILT_IN_TEMPLATES = [
       {id:"s6",name:"F 바이오",code:"FBIO",emoji:"🧪",initialPrice:3000,prices:[3120,2180,2440],totalSupply:0,listed:true},
       {id:"s7",name:"G 식품",code:"GFOOD",emoji:"🍞",initialPrice:9000,prices:[10620,9340,11210],totalSupply:0,listed:true},
       {id:"s8",name:"H 뷰티",code:"HBEAU",emoji:"💄",initialPrice:25000,prices:[15500,10850,1],totalSupply:0,listed:true,
+        noPayoutOnDelist:true,
         autoDelist:{round:3,phase:"roundStart",forceSell:true,reason:"3라운드 상장폐지"}},
       {id:"s9",name:"I 화학",code:"ICHEM",emoji:"🧫",initialPrice:10000,prices:[10600,6150,2770],totalSupply:0,listed:true},
       {id:"s10",name:"J 조선",code:"JSHIP",emoji:"🚢",initialPrice:30000,prices:[31500,25200,13100],totalSupply:0,listed:true},
@@ -472,12 +473,12 @@ const BUILT_IN_TEMPLATES = [
       {id:"sh13",name:"J 조선 힌트",desc:"J 조선 라운드별 종목 힌트",pointPrice:2,emoji:"🚢",hint:"[1라운드]\n1. 글로벌 해운 물동량 증가와 노후 선박 교체 수요가 맞물리며 대형 선박 발주가 급증하고 있고, 이 회사가 수주 1순위로 꼽히고 있다.\n2. 이 회사의 현재 수주 잔고는 약 2.5년치 일감이며, 달러 강세로 인해 원화 환산 수익성이 크게 개선되고 있다.\n3. LNG 운반선 시장에서 이 회사가 독점적 기술력을 인정받으며, 경쟁사가 따라오지 못하는 영역이 생겼다는 업계 평가가 나오고 있다.\n\n[2라운드]\n1. 이 회사가 수주 협의 중인 대형 프로젝트 몇 건의 계약 일정이 발주처 측 사정으로 수개월 지연됐다는 소식이 있다.\n2. 이 회사의 주요 거래처 중 한 곳이 최근 자금 조달 시장에서 어려움을 겪고 있다는 소문이 조선 업계에 퍼지고 있다.\n3. 이 회사는 현재 수주 협의를 여러 건 병행하고 있으며, 연내 한두 건의 계약이 체결될 것이라는 낙관적 전망을 유지하고 있다.\n※ 거시 힌트 보유 시: 계약 지연과 거래처 자금난은 계약 취소의 전조다. 감염병으로 글로벌 해운 물동량이 급감하면 발주 자체가 사라질 수 있다.\n\n[3라운드]\n1. 이 회사의 수조 원 규모 계약 취소로 인해 협력업체 수백 곳의 일감이 사라졌으며, 지역 경제 붕괴 우려까지 나오고 있다.\n2. 해당 프로젝트에 이미 투입된 원자재·설계 비용 회수가 불투명하며, 법적 분쟁으로 이어질 경우 수년간 자금이 묶일 수 있다.\n3. 이 회사의 부채비율이 임계치를 넘어설 것이라는 증권사 보고서가 나왔으며, 워크아웃 가능성까지 거론되고 있다."},
     ],
     eventPresets:[
-      {id:"e1",name:"1R 호재 확정 - A 엔터",emoji:"🏆",desc:"A엔터 연예인 MJJ 빌보드 1위 등극 후 세계에서 가장 영향력 있는 인물로 선정",globalEffect:0,stockEffects:{s1:18},note:"1라운드 대표 호재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true},
+      {id:"e1",name:"1R 호재 확정 - A 엔터",emoji:"🏆",desc:"A엔터 연예인 MJJ 빌보드 1위 등극 후 세계에서 가장 영향력 있는 인물로 선정",globalEffect:0,stockEffects:{s1:18},note:"1라운드 대표 호재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true,triggerAtRound:1,triggerAtSecond:240},
       {id:"e2",name:"1R 치명 악재 - H 뷰티",emoji:"☣️",desc:"H뷰티 화장품 파우더에서 1급 발암물질인 석면 검출",globalEffect:0,stockEffects:{s8:-28},note:"1라운드 대표 악재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
-      {id:"e3",name:"1R 황당 찌라시 - G 식품",emoji:"🍽️",desc:"공사장 인부들 새참이 떡에서 호빵으로 변경",globalEffect:0,stockEffects:{s7:12},note:"1라운드 찌라시 수혜",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true},
-      {id:"e4",name:"2R 호재 확정 - C IT",emoji:"🍎",desc:"C IT, 글로벌 기업 애플과 차세대 자율주행차 핵심 부품 독점 공급 계약 체결",globalEffect:0,stockEffects:{s3:20},note:"폭락장 역주행 호재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
-      {id:"e5",name:"2R 치명 악재 - I 화학",emoji:"🔋",desc:"I화학, 주력 배터리 제품 대규모 결함 발견으로 전 세계 전량 리콜 결정",globalEffect:0,stockEffects:{s9:-30},note:"2라운드 대표 악재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
-      {id:"e6",name:"2R 황당 찌라시 - D IT",emoji:"🧭",desc:"D IT 사옥 현관 방향이 풍수지리상 재물이 빠지는 수구 방향이라 정문 이전 공사 예정설",globalEffect:0,stockEffects:{s4:-10},note:"폭락장 속 찌라시 악영향",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true},
+      {id:"e3",name:"1R 황당 찌라시 - G 식품",emoji:"🍽️",desc:"공사장 인부들 새참이 떡에서 호빵으로 변경",globalEffect:0,stockEffects:{s7:12},note:"1라운드 찌라시 수혜",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true,triggerAtRound:1,triggerAtSecond:380},
+      {id:"e4",name:"2R 호재 확정 - C IT",emoji:"🍎",desc:"C IT, 글로벌 기업 애플과 차세대 자율주행차 핵심 부품 독점 공급 계약 체결",globalEffect:0,stockEffects:{s3:20},note:"폭락장 역주행 호재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true,triggerAtRound:2,triggerAtSecond:240},
+      {id:"e5",name:"2R 치명 악재 - I 화학",emoji:"🔋",desc:"I화학, 주력 배터리 제품 대규모 결함 발견으로 전 세계 전량 리콜 결정",globalEffect:0,stockEffects:{s9:-30},note:"2라운드 대표 악재",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true,triggerAtRound:2,triggerAtSecond:90},
+      {id:"e6",name:"2R 황당 찌라시 - D IT",emoji:"🧭",desc:"D IT 사옥 현관 방향이 풍수지리상 재물이 빠지는 수구 방향이라 정문 이전 공사 예정설",globalEffect:0,stockEffects:{s4:-10},note:"폭락장 속 찌라시 악영향",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true,triggerAtRound:2,triggerAtSecond:380},
       {id:"e7",name:"3R 호재 확정 - E 바이오",emoji:"💊",desc:"E바이오, 암세포만 골라 죽이는 꿈의 항암제 임상 3상 최종 통과 및 시판 허가",globalEffect:0,stockEffects:{s5:28},note:"3라운드 폭등 재료",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
       {id:"e8",name:"3R 치명 악재 - J 조선",emoji:"⚓",desc:"J조선, 수주했던 수조 원 규모 초대형 유조선 프로젝트 계약 상대측 파산으로 전격 취소",globalEffect:0,stockEffects:{s10:-26},note:"3라운드 대폭락 재료",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:120,affectTarget:true},
       {id:"e9",name:"3R 황당 찌라시 - G 식품",emoji:"🔴",desc:"G식품 회장님이 꿈에서 조상님 계시를 받아 모든 로고·포장지를 내일부터 빨간색으로 변경 예정",globalEffect:0,stockEffects:{s7:10},note:"3라운드 찌라시 재등장",autoTrigger:false,triggerIntervalMin:1,triggerIntervalMax:2,probability:100,duration:90,affectTarget:true},
@@ -745,6 +746,10 @@ const INIT_SS={
   eventSnapshots: {},
   diamondsEnabled: true,
   groups: {},
+  teamCashMode: false,
+  teamCash: 0,
+  groupCash: {},
+  firedEventIds: [],
   // 시드 보정
   seedBalancing: true,
   // 자동 타임라인
@@ -768,14 +773,32 @@ const INIT_SS={
   rules: "",
 };
 
-const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, initCash = DEFAULT_INIT_CASH) => {
+const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, initCash = DEFAULT_INIT_CASH, teamCashMode = false, teamCash = 0, groupCash = {}) => {
+  const groupCounts = {};
+  if (teamCashMode) {
+    for (const cred of Object.values(teamCredentials || {})) {
+      if (!cred?.id || !cred.groupName) continue;
+      groupCounts[cred.groupName] = (groupCounts[cred.groupName] || 0) + 1;
+    }
+  }
   const freshTeams = {};
-  for (const [name, { id, groupName }] of Object.entries(teamCredentials || {})) {
+  for (const [name, cred] of Object.entries(teamCredentials || {})) {
+    if (!cred?.id) continue;
+    const { id, groupName } = cred;
     const existingPoints = existingTeams?.[id]?.diamonds || 0;
+    let playerCash = initCash;
+    if (teamCashMode && groupName) {
+      // 조별 개별 자금 우선, 없으면 teamCash 공통값
+      const thisGroupCash = (groupCash?.[groupName] > 0 ? groupCash[groupName] : null) ?? (teamCash > 0 ? teamCash : null);
+      if (thisGroupCash > 0) {
+        playerCash = Math.floor(thisGroupCash / (groupCounts[groupName] || 1));
+      }
+    }
     freshTeams[id] = {
       name,
       groupName: groupName || "",
-      cash: initCash,
+      cash: playerCash,
+      initCash: playerCash,
       holdings: { _empty: true },
       purchases: ["_empty"],
       history: ["_empty"],
@@ -978,9 +1001,101 @@ function useAutoEventAndHistory(shared) {
         changed = true;
       });
 
-      // 2. 자동 이벤트 체크
+      // 2. 자동/예약/시간지정 이벤트 체크
       let eventUpdate = {};
-      if (s.nextAutoEventAt && now >= s.nextAutoEventAt) {
+      const timeLeft = (s.roundEndsAt || 0) - now;
+      const tooCloseToEnd = s.roundEndsAt && timeLeft >= 0 && timeLeft < 60000;
+
+      // 시간 지정 이벤트 (triggerAtRound + triggerAtSecond)
+      if (!s.activeEvent && !tooCloseToEnd && s.roundStartedAt) {
+        const elapsed = now - s.roundStartedAt;
+        const firedIds = s.firedEventIds || [];
+        const timedEv = (s.eventPresets || []).find(ev =>
+          ev.triggerAtRound === s.round &&
+          typeof ev.triggerAtSecond === 'number' &&
+          elapsed >= ev.triggerAtSecond * 1000 &&
+          !firedIds.includes(ev.id)
+        );
+        if (timedEv) {
+          const ev = timedEv;
+          const newMod = { ...(s.modifiedTargets || {}) };
+          if (ev.affectTarget !== false) {
+            (s.stocks || []).forEach(stock => {
+              const eff = ev.stockEffects?.[stock.id] ?? ev.globalEffect ?? 0;
+              if (eff === 0) return;
+              const ri = Math.min(s.round - 1, stock.prices.length - 1);
+              const base = newMod[stock.id]?.round === s.round ? newMod[stock.id].modifiedPrice : stock.prices[ri];
+              newMod[stock.id] = { round: s.round, originalPrice: stock.prices[ri], modifiedPrice: Math.max(Math.round(base * (1 + eff / 100)), 1) };
+            });
+          }
+          const snapshots3 = {};
+          (s.stocks || []).forEach(stock => {
+            snapshots3[stock.id] = { appliedAt: now, basePrice: getCurrentPrice(stock, s.round, s.roundStartedAt, s.roundEndsAt, null, s.modifiedTargets, null, s.phase) };
+          });
+          eventUpdate = {
+            activeEvent: { ...ev, appliedAt: now },
+            eventHistory: [...(s.eventHistory || []), { ...ev, appliedAt: now }],
+            modifiedTargets: newMod,
+            eventSnapshots: snapshots3,
+            firedEventIds: [...firedIds, ev.id],
+          };
+          if (ev.duration > 0) {
+            setTimeout(() => {
+              setShared(ss => ({
+                ...ss, activeEvent: null,
+                ...(ev.affectTarget === false ? { eventFadeOut: { stockEffects: ev.stockEffects, globalEffect: ev.globalEffect, endedAt: Date.now(), fadeDuration: 60000 } } : {}),
+              }));
+            }, ev.duration * 1000);
+          }
+        }
+      }
+
+      // 예약 이벤트 실행
+      if (s.scheduledEvent && now >= s.scheduledEvent.fireAt && !tooCloseToEnd && !s.activeEvent) {
+        const ev = s.scheduledEvent.event;
+        const newMod = { ...(s.modifiedTargets || {}) };
+        if (ev.affectTarget !== false) {
+          (s.stocks || []).forEach(stock => {
+            const eff = ev.stockEffects?.[stock.id] ?? ev.globalEffect ?? 0;
+            if (eff === 0) return;
+            const ri = Math.min(s.round - 1, stock.prices.length - 1);
+            const base = newMod[stock.id]?.round === s.round
+              ? newMod[stock.id].modifiedPrice : stock.prices[ri];
+            newMod[stock.id] = {
+              round: s.round,
+              originalPrice: stock.prices[ri],
+              modifiedPrice: Math.max(Math.round(base * (1 + eff / 100)), 1),
+            };
+          });
+        }
+        const snapshots2 = {};
+        (s.stocks || []).forEach(stock => {
+          snapshots2[stock.id] = {
+            appliedAt: now,
+            basePrice: getCurrentPrice(stock, s.round, s.roundStartedAt, s.roundEndsAt, null, s.modifiedTargets, null, s.phase),
+          };
+        });
+        eventUpdate = {
+          activeEvent: { ...ev, appliedAt: now },
+          eventHistory: [...(s.eventHistory || []), { ...ev, appliedAt: now }],
+          modifiedTargets: newMod,
+          eventSnapshots: snapshots2,
+          scheduledEvent: null,
+        };
+        if (ev.duration > 0) {
+          setTimeout(() => {
+            setShared(ss => ({
+              ...ss,
+              activeEvent: null,
+              ...(ev.affectTarget === false ? {
+                eventFadeOut: { stockEffects: ev.stockEffects, globalEffect: ev.globalEffect, endedAt: Date.now(), fadeDuration: 60000 }
+              } : {}),
+            }));
+          }, ev.duration * 1000);
+        }
+      }
+
+      if (!eventUpdate.activeEvent && s.nextAutoEventAt && now >= s.nextAutoEventAt && !tooCloseToEnd) {
         const autoEvents = (s.eventPresets || []).filter(e => e.autoTrigger);
         if (autoEvents.length > 0) {
           const triggered = autoEvents.filter(e => Math.random() * 100 < (e.probability || 50));
@@ -1672,6 +1787,12 @@ function AdminApp({onBack=null}){
   const [rounds,setRounds]=useState(()=>BUILT_IN_TEMPLATES[0].rounds.map(r=>({...r})));
   const [maxRound,setMaxRound]=useState(3);
   const [initCash,setInitCash]=useState(DEFAULT_INIT_CASH);
+  const [teamCashMode,setTeamCashMode]=useState(false);
+  const [teamCash,setTeamCash]=useState(0);
+  const [groupCash,setGroupCash]=useState({});
+  const [controlHintTab,setControlHintTab]=useState("hint");
+  const [eventDelay,setEventDelay]=useState(0);
+  const [stockOpen,setStockOpen]=useState(false);
   const [feeRate,setFeeRate]=useState(0.1);
   const [leverageEnabled,setLeverageEnabled]=useState(false);
   const [leverageMax,setLeverageMax]=useState(2);
@@ -1881,6 +2002,9 @@ function AdminApp({onBack=null}){
     setEventPresets(ep);
     setMaxRound(tpl.maxRound);
     setInitCash(nextInitCash);
+    setTeamCashMode(tpl.teamCashMode || false);
+    setTeamCash(tpl.teamCash || 0);
+    setGroupCash(tpl.groupCash || {});
     setFeeRate(tpl.feeRate ?? 0.1);
     setLeverageEnabled(tpl.leverageEnabled ?? false);
     setLeverageMax(tpl.leverageMax ?? 2);
@@ -1899,6 +2023,9 @@ function AdminApp({onBack=null}){
       eventPresets: ep,
       maxRound: tpl.maxRound,
       initCash: nextInitCash,
+      teamCashMode: tpl.teamCashMode || false,
+      teamCash: tpl.teamCash || 0,
+      groupCash: tpl.groupCash || {},
       feeRate: tpl.feeRate ?? 0.1,
       leverageEnabled: tpl.leverageEnabled ?? false,
       leverageMax: tpl.leverageMax ?? 2,
@@ -1911,7 +2038,7 @@ function AdminApp({onBack=null}){
       minBet: tpl.betMinAmount ?? 100000,
       maxBetPct: tpl.betMaxRatio ?? 50,
       betWindow: tpl.betDuration ?? 30,
-      teams: buildFreshTeamsFromCreds(ss.teamCredentials || {}, ss.teams || {}, nextInitCash),
+      teams: buildFreshTeamsFromCreds(ss.teamCredentials || {}, ss.teams || {}, nextInitCash, tpl.teamCashMode || false, tpl.teamCash || 0, tpl.groupCash || {}),
       phase: "ready",
       round: 0,
       roundStartedAt: null,
@@ -2038,7 +2165,15 @@ function AdminApp({onBack=null}){
       if(shared.teamCredentials?.[name]) continue;
       const id=uid();
       newCreds[name]={id,groupName:group};
-      newTeams[id]={name,groupName:group,cash:shared.initCash||DEFAULT_INIT_CASH,
+      let bCash=shared.initCash||DEFAULT_INIT_CASH;
+      if(shared.teamCashMode&&group){
+        const gTotal=(shared.groupCash?.[group]>0?shared.groupCash[group]:null)??(shared.teamCash>0?shared.teamCash:null);
+        if(gTotal>0){
+          const existCount=Object.values(shared.teamCredentials||{}).filter(c=>c.groupName===group).length;
+          bCash=Math.floor(gTotal/(existCount+count));
+        }
+      }
+      newTeams[id]={name,groupName:group,cash:bCash,
         holdings:{_empty:true},purchases:["_empty"],history:["_empty"],borrowed:0,diamonds:0};
       newMemberIds.push(id);
     }
@@ -2356,6 +2491,15 @@ function AdminApp({onBack=null}){
     t2(`🚨 ${ev.name} 발동!`);
   };
   const clearEvent=()=>{setShared(s=>({...s,activeEvent:null}));t2("이벤트 해제");};
+  const scheduleEvent=(ev,delaySec)=>{
+    const fireAt=Date.now()+delaySec*1000;
+    setShared(s=>({...s,scheduledEvent:{event:ev,fireAt}}));
+    t2(`${ev.name} ${delaySec}초 후 예약`);
+  };
+  const cancelScheduledEvent=()=>{
+    setShared(s=>({...s,scheduledEvent:null}));
+    t2("이벤트 예약 취소");
+  };
 
   // 보너스
   const giveBonus=tid=>{
@@ -2541,7 +2685,7 @@ function AdminApp({onBack=null}){
 
         {/* ══ 진행 탭 ══ */}
         {tab==="control"&&<>
-          {/* 자동 타임라인 */}
+          {/* ▶ 자동 타임라인 */}
           {!shared.timelineAuto ? (
             <Btn onClick={() => {
               setShared(s => ({
@@ -2597,289 +2741,308 @@ function AdminApp({onBack=null}){
             </div>
           )}
 
-          {/* 힌트 설정 */}
+          {/* ▶ 라운드 제어 */}
           <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>
-              💡 종가 확인 힌트 설정
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.black}}>라운드 제어</div>
+              <div style={{fontSize:11,color:G.gray1,fontWeight:600}}>{phaseLabel} · {shared.round||0}/{shared.maxRound||3}R</div>
             </div>
-            <div style={{fontSize:11,color:G.gray1,marginBottom:8}}>
-              종가 확인 단계에서 팀원에게 공개될 힌트
-            </div>
-            <textarea value={resultHintInput}
-              onChange={e=>setResultHintInput(e.target.value)}
-              placeholder="예) 다음 라운드에서 에너지 섹터 강세 예상"
-              rows={3}
-              style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,
-                padding:"9px 10px",fontSize:13,fontFamily:"inherit",outline:"none",
-                color:G.black,boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}/>
-            <div style={{display:"flex",gap:8,marginTop:8}}>
-              <Btn onClick={()=>{
-                setShared(s=>({...s,resultHint:resultHintInput}));
-                t2("힌트 저장됨");
-              }} style={{flex:1,padding:"9px",fontSize:12}}>저장</Btn>
-              <Btn onClick={()=>{
-                setShared(s=>({...s,resultHint:""}));
-                setResultHintInput("");
-                t2("힌트 삭제됨");
-              }} color={G.redLight} textColor={G.red}
-                style={{flex:1,padding:"9px",fontSize:12}}>삭제</Btn>
-            </div>
-          </div>
-
-          {/* 규칙 설정 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:4}}>📋 게임 규칙</div>
-            <div style={{fontSize:11,color:G.gray1,marginBottom:8}}>참여자 화면의 규칙 탭에 표시됩니다</div>
-            <textarea value={rulesInput} onChange={e=>setRulesInput(e.target.value)}
-              placeholder={"예) 1. 매수·매도는 라운드 진행 중에만 가능합니다\n2. 수수료율 10%\n3. 레버리지 최대 2배"}
-              rows={5}
-              style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,
-                padding:"9px 10px",fontSize:13,fontFamily:"inherit",outline:"none",
-                color:G.black,boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}/>
-            <div style={{display:"flex",gap:8,marginTop:8}}>
-              <Btn onClick={()=>{setShared(s=>({...s,rules:rulesInput}));t2("규칙 저장됨");}} style={{flex:1,padding:"9px",fontSize:12}}>저장</Btn>
-              <Btn onClick={()=>{setShared(s=>({...s,rules:""}));setRulesInput("");t2("규칙 삭제됨");}} color={G.redLight} textColor={G.red} style={{flex:1,padding:"9px",fontSize:12}}>삭제</Btn>
-            </div>
-          </div>
-
-          {/* 공지 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>📢 전체 공지</div>
-            <div style={{display:"flex",gap:8,marginBottom:6}}>
-              <TextInput value={noticeInput} onChange={e=>setNoticeInput(e.target.value)} placeholder="전체 팀에게 보낼 공지" style={{flex:1}}/>
-              <Btn onClick={()=>{setShared(s=>({...s,notice:noticeInput,noticeAt:Date.now()}));t2("공지 전송");}} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
-            </div>
-            {shared.notice&&<div style={{fontSize:11,color:G.blue,background:G.blueLight,borderRadius:8,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>{shared.notice}</span>
-              <span onClick={()=>{setShared(s=>({...s,notice:"",noticeAt:null}));setNoticeInput("");}} style={{cursor:"pointer",color:G.red,marginLeft:8}}>×</span>
-            </div>}
-          </div>
-
-          {/* 채팅 관리 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💬 채팅 관리</div>
-
-            {/* 채팅 전송 */}
-            {(()=>{
-              const sendAdminChat=()=>{
-                const text=adminChatInput.trim();
-                if(!text){t2("메시지를 입력하세요");return;}
-                const msg={id:uid(),teamName:"🛠 운영자",text,ts:Date.now()};
-                setShared(s=>({...s,chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200)}));
-                setAdminChatInput("");
-                t2("채팅 전송됨");
-              };
-              return(
-                <div style={{display:"flex",gap:8,marginBottom:10}}>
-                  <TextInput value={adminChatInput} onChange={e=>setAdminChatInput(e.target.value)}
-                    onKeyDown={e=>e.key==="Enter"&&sendAdminChat()}
-                    placeholder="운영자로 채팅 전송 (Enter)" style={{flex:1}}/>
-                  <Btn onClick={sendAdminChat} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
-                </div>
-              );
-            })()}
-
-            {/* 채팅 미리보기 + 개별 삭제 */}
-            <div style={{maxHeight:200,overflowY:"auto",marginBottom:8}}>
-              {(shared.chatMessages||[]).length===0
-                ?<div style={{textAlign:"center",color:G.gray2,fontSize:12,padding:"12px 0"}}>채팅 없음</div>
-                :[...(shared.chatMessages||[])].reverse().map(msg=>(
-                  <div key={msg.id} style={{display:"flex",alignItems:"flex-start",gap:8,
-                    padding:"6px 0",borderBottom:`1px solid ${G.border}`}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:11,fontWeight:600,color:msg.teamName==="🛠 운영자"?G.orange:G.blue,marginBottom:2}}>
-                        {msg.teamName}
-                      </div>
-                      <div style={{fontSize:12,color:G.black,wordBreak:"break-all"}}>{msg.text}</div>
-                      <div style={{fontSize:10,color:G.gray2,marginTop:2}}>
-                        {new Date(msg.ts).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
-                      </div>
-                    </div>
-                    <div onClick={()=>{
-                      setShared(s=>({...s,
-                        chatMessages:(Array.isArray(s.chatMessages)?s.chatMessages:[])
-                          .filter(m=>m.id!==msg.id)
-                      }));
-                      t2("메시지 삭제됨");
-                    }}
-                      style={{width:24,height:24,borderRadius:6,background:G.redLight,color:G.red,
-                        display:"flex",alignItems:"center",justifyContent:"center",
-                        cursor:"pointer",fontSize:13,fontWeight:700,flexShrink:0}}>×</div>
-                  </div>
-                ))
-              }
-            </div>
-
-            {/* 전체 삭제 */}
-            {(shared.chatMessages||[]).length>0&&(
-              <Btn
-                onClick={()=>{
-                  if(!window.confirm("채팅 전체를 삭제할까요?")) return;
-                  setShared(s=>({...s,chatMessages:["_empty"]}));
-                  t2("채팅 전체 삭제됨");
-                }}
-                color={G.redLight} textColor={G.red}
-                style={{width:"100%",padding:"9px",fontSize:12}}>
-                🗑 채팅 전체 삭제
-              </Btn>
-            )}
-          </div>
-
-          {/* 현재 상태 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>현재 상태</div>
-            {[["단계",phaseLabel],["라운드",`${shared.round||0}/${shared.maxRound||3}`],
-              ["참가팀",`${Object.keys(shared.teams||{}).length}팀`],
-              ["수수료",`${shared.feeRate||0.1}%`],
-              ["레버리지",shared.leverageEnabled?`최대 x${shared.leverageMax}`:"비활성"]].map(([k,v])=>(
-              <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${G.border}`}}>
-                <span style={{fontSize:13,color:G.gray1}}>{k}</span>
-                <span style={{fontSize:13,fontWeight:600,color:G.black}}>{v}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* 1라운드 전 베팅 오픈 */}
-          {shared.phase==="ready"&&shared.betEnabled&&(
-            <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-              <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>🎲 1라운드 전 베팅</div>
-              {!shared.betDeadline||shared.betDeadline<Date.now()?(
-                <Btn onClick={()=>{
-                    const deadline=Date.now()+(shared.betWindow||30)*1000;
-                    setShared(s=>({...s,betDeadline:deadline,betOdds:{}}));
-                    t2(`베팅 오픈 (${shared.betWindow||30}초)`);
-                  }}
-                  color={G.purple}
-                  style={{width:"100%",padding:"12px",fontSize:13}}>
-                  🎲 1라운드 베팅 오픈
-                </Btn>
-              ):(
-                <div>
-                  <div style={{background:G.purpleLight,borderRadius:10,padding:"10px 12px",
-                    marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:13,color:G.purple,fontWeight:600}}>베팅 진행 중</span>
-                    <span style={{fontSize:14,fontWeight:800,color:G.purple,fontFamily:"monospace"}}>
-                      {betRem!==null&&betRem>0?secToStr(betRem):"마감"}
-                    </span>
-                  </div>
-                  <Btn onClick={()=>{setShared(s=>({...s,betDeadline:0}));t2("베팅 마감");}}
-                    color={G.redLight} textColor={G.red}
-                    style={{width:"100%",padding:"10px",fontSize:12}}>
-                    베팅 즉시 마감
-                  </Btn>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 자동 진행 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:shared.autoPlay&&shared.phase==="break"?10:0}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:700,color:G.black}}>Break 후 자동 시작</div>
-                <div style={{fontSize:11,color:G.gray1}}>휴식({breakDuration}s) 끝나면 다음 라운드 자동 시작 (수동 제어 시 사용)</div>
-              </div>
-              <div onClick={()=>setShared(s=>({...s,autoPlay:!s.autoPlay}))}
-                style={{width:44,height:26,borderRadius:13,background:shared.autoPlay?G.green:G.gray3,
-                  position:"relative",cursor:"pointer",transition:"background .2s"}}>
-                <div style={{width:22,height:22,borderRadius:"50%",background:G.white,position:"absolute",
-                  top:2,left:shared.autoPlay?20:2,transition:"left .2s"}}/>
-              </div>
-            </div>
-            {shared.autoPlay&&shared.phase==="break"&&(
-              <div style={{background:G.yellowLight,borderRadius:10,padding:"10px 12px"}}>
-                <div style={{fontSize:12,fontWeight:700,color:G.yellow,marginBottom:2}}>
-                  휴식 중 — R{(shared.round||0)+1} 자동 시작까지
-                  <span style={{fontFamily:"monospace",marginLeft:6}}>{breakRem!==null?secToStr(breakRem):"--:--"}</span>
-                </div>
-                {shared.betEnabled&&shared.betDeadline&&(
-                  <div style={{fontSize:11,color:G.orange}}>
-                    🎯 베팅 마감까지 {betRem!==null&&betRem>0?secToStr(betRem):"마감"}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 라운드 제어 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>라운드 제어 (총 {shared.maxRound||3}라운드)</div>
             {Array.from({length:shared.maxRound||3},(_,i)=>i+1).map(r=>{
               const rc=shared.rounds?.[r-1];
               const isActive=shared.round===r&&shared.phase==="round";
-              const isBlind=rc?.blind||false;
-              const hasDivs=Object.keys(rc?.dividends||{}).length>0;
               return(
-                <div key={r} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                  <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,
-                    background:isActive?G.green:shared.round>r?G.gray3:G.bg,
+                <div key={r} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,
+                    background:isActive?G.green:shared.round>r?"#aaa":G.bg,
                     display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:12,fontWeight:700,color:isActive?G.white:shared.round>r?G.white:G.gray2}}>
+                    fontSize:11,fontWeight:700,color:isActive||shared.round>r?G.white:G.gray2}}>
                     {shared.round>r?"✓":r}
                   </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:600,color:G.black}}>
-                      R{r} <span style={{fontSize:11,color:G.gray1,fontWeight:400}}>({rc?.durationMin||5}분)</span>
-                      {isBlind&&<span style={{fontSize:10,color:G.purple,background:G.purpleLight,borderRadius:4,padding:"1px 5px",marginLeft:4}}>블라인드</span>}
-                      {hasDivs&&<span style={{fontSize:10,color:G.green,background:G.greenLight,borderRadius:4,padding:"1px 5px",marginLeft:4}}>배당</span>}
-                    </div>
+                  <div style={{flex:1,fontSize:12,fontWeight:600,color:G.black}}>
+                    R{r} <span style={{fontSize:11,color:G.gray1,fontWeight:400}}>({rc?.durationMin||5}분)</span>
+                    {rc?.blind&&<span style={{fontSize:10,color:G.purple,background:G.purpleLight,borderRadius:3,padding:"1px 4px",marginLeft:4}}>블라인드</span>}
                   </div>
-                  <Btn onClick={()=>startRound(r)} color={isActive?G.green:G.blue} style={{padding:"7px 12px",fontSize:12}}>
+                  <Btn onClick={()=>startRound(r)} color={isActive?G.green:G.blue} style={{padding:"6px 12px",fontSize:11}}>
                     {isActive?"진행중":shared.round>r?"재시작":"시작"}
                   </Btn>
                 </div>
               );
             })}
-          </div>
-
-          <div style={{display:"flex",gap:8,marginBottom:10}}>
-            <Btn onClick={stopRound} color={G.yellow} textColor={G.black} style={{flex:1,padding:"12px 0"}}>라운드 종료</Btn>
-            <Btn onClick={()=>{if(!window.confirm("게임을 종료하시겠습니까?")) return; endGame();}} color={G.black} style={{flex:1,padding:"12px 0"}}>게임 종료</Btn>
-          </div>
-
-          {/* 종목 상장/폐지 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:10}}>📋 종목 상장·폐지</div>
-            {(shared.stocks||[]).map(st=>(
-              <div key={st.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:`1px solid ${G.border}`}}>
-                <span style={{fontSize:18}}>{st.emoji}</span>
-                <span style={{flex:1,fontSize:13,fontWeight:600,color:st.listed!==false?G.black:G.gray2,textDecoration:st.listed===false?"line-through":"none"}}>{st.name}</span>
-                <span style={{fontSize:11,color:st.listed!==false?G.green:G.red,fontWeight:600}}>{st.listed!==false?"상장중":"폐지"}</span>
-                {st.listed!==false
-                  ?<Btn onClick={()=>delistStock(st.id)} color={G.redLight} textColor={G.red} style={{padding:"5px 10px",fontSize:11}}>폐지</Btn>
-                  :<Btn onClick={()=>relistStock(st.id)} color={G.greenLight} textColor={G.green} style={{padding:"5px 10px",fontSize:11}}>재상장</Btn>}
-              </div>
-            ))}
-          </div>
-
-          {/* 긴급 이벤트 발동 */}
-          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontSize:13,fontWeight:700,color:G.black}}>🚨 긴급 이벤트 발동</div>
-              {shared.activeEvent&&<Btn onClick={clearEvent} color={G.redLight} textColor={G.red} style={{padding:"5px 10px",fontSize:11}}>해제</Btn>}
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <Btn onClick={stopRound} color={G.yellow} textColor={G.black} style={{flex:1,padding:"10px 0",fontSize:12}}>라운드 종료</Btn>
+              <Btn onClick={()=>{if(!window.confirm("게임을 종료하시겠습니까?")) return; endGame();}} color={G.black} style={{flex:1,padding:"10px 0",fontSize:12}}>게임 종료</Btn>
             </div>
-            {shared.activeEvent&&(
-              <div style={{background:G.orangeLight,borderRadius:10,padding:"10px 12px",marginBottom:10,border:`1.5px solid ${G.orange}`}}>
-                <div style={{fontSize:12,fontWeight:700,color:G.orange}}>활성: {shared.activeEvent.emoji} {shared.activeEvent.name}</div>
+            {/* 베팅 */}
+            {shared.betEnabled&&(
+              <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${G.border}`}}>
+                {!shared.betDeadline||shared.betDeadline<Date.now()?(
+                  <Btn onClick={()=>{setShared(s=>({...s,betDeadline:Date.now()+(shared.betWindow||30)*1000,betOdds:{}}));t2("베팅 오픈");}}
+                    color={G.purple} style={{width:"100%",padding:"9px",fontSize:12}}>🎲 베팅 오픈</Btn>
+                ):(
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{flex:1,fontSize:12,color:G.purple,fontWeight:600}}>베팅 진행중 {betRem!==null&&betRem>0?secToStr(betRem):"마감"}</div>
+                    <Btn onClick={()=>{setShared(s=>({...s,betDeadline:0}));t2("베팅 마감");}} color={G.redLight} textColor={G.red} style={{padding:"6px 10px",fontSize:11}}>마감</Btn>
+                  </div>
+                )}
               </div>
             )}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {/* Break 자동시작 */}
+            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${G.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:12,color:G.gray1}}>Break 후 자동 시작</div>
+              <div onClick={()=>setShared(s=>({...s,autoPlay:!s.autoPlay}))}
+                style={{width:40,height:22,borderRadius:11,background:shared.autoPlay?G.green:G.gray3,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:G.white,position:"absolute",top:2,left:shared.autoPlay?20:2,transition:"left .2s"}}/>
+              </div>
+            </div>
+            {shared.autoPlay&&shared.phase==="break"&&(
+              <div style={{background:G.yellowLight,borderRadius:8,padding:"8px 10px",marginTop:6,fontSize:11,color:G.yellow,fontWeight:600}}>
+                R{(shared.round||0)+1} 자동 시작까지 {breakRem!==null?secToStr(breakRem):"--:--"}
+              </div>
+            )}
+          </div>
+
+          {/* 💰 시작 자금 설정 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>💰 시작 자금 설정</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:teamCashMode?10:0}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:G.black}}>팀 공유 자금</div>
+                <div style={{fontSize:11,color:G.gray1}}>팀 전체 자금 ÷ 팀원 수 = 1인당 자금</div>
+              </div>
+              <div onClick={()=>{setTeamCashMode(v=>!v);setShared(s=>({...s,teamCashMode:!s.teamCashMode}));}}
+                style={{width:40,height:22,borderRadius:11,background:teamCashMode?G.blue:G.gray3,position:"relative",cursor:"pointer",transition:"background .2s"}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:G.white,position:"absolute",top:2,left:teamCashMode?20:2,transition:"left .2s"}}/>
+              </div>
+            </div>
+            {teamCashMode?(
+              <div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>기본 팀당 자금 (원)</div>
+                    <NumInput value={teamCash} onChange={e=>{const v=parseInt(e.target.value)||0;setTeamCash(v);setShared(s=>({...s,teamCash:v}));}}/>
+                  </div>
+                </div>
+                <div style={{fontSize:11,color:G.blue,marginTop:6,marginBottom:8}}>
+                  ※ 4인 팀→1인당 {fmt(Math.floor(teamCash/4))} · 5인 팀→{fmt(Math.floor(teamCash/5))}
+                </div>
+                {/* 조별 개별 자금 설정 */}
+                {(()=>{
+                  const credVals=Object.values(shared.teamCredentials||{});
+                  const gNames=[...new Set(credVals.map(c=>c.groupName).filter(Boolean))].sort();
+                  const mCnt={};
+                  credVals.forEach(c=>{if(c.groupName)mCnt[c.groupName]=(mCnt[c.groupName]||0)+1;});
+                  if(gNames.length===0) return null;
+                  return(
+                    <div style={{borderTop:`1px solid ${G.border}`,paddingTop:8}}>
+                      <div style={{fontSize:11,fontWeight:700,color:G.black,marginBottom:6}}>조별 개별 자금 설정</div>
+                      <div style={{fontSize:10,color:G.gray2,marginBottom:8}}>비워두면 위 기본값 적용</div>
+                      {gNames.map(g=>{
+                        const cnt=mCnt[g]||1;
+                        const thisTotal=groupCash[g]>0?groupCash[g]:null;
+                        return(
+                          <div key={g} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                            <div style={{fontSize:12,fontWeight:700,color:G.black,minWidth:46}}>{g}</div>
+                            <NumInput
+                              value={groupCash[g]||""}
+                              placeholder={String(teamCash||"")}
+                              onChange={e=>{
+                                const v=parseInt(e.target.value)||0;
+                                const next={...groupCash};
+                                if(v>0) next[g]=v; else delete next[g];
+                                setGroupCash(next);
+                                setShared(s=>({...s,groupCash:next}));
+                              }}
+                              style={{flex:1}}
+                            />
+                            <div style={{fontSize:10,color:G.blue,minWidth:90,textAlign:"right"}}>
+                              {thisTotal!=null?`÷${cnt}=${fmt(Math.floor(thisTotal/cnt))}`:cnt>0?`÷${cnt}=${fmt(Math.floor((teamCash||0)/cnt))}`:null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            ):(
+              <div style={{marginTop:8}}>
+                <div style={{fontSize:11,color:G.gray2,marginBottom:3}}>개인 시작 자금 (원)</div>
+                <NumInput value={initCash} onChange={e=>{const v=parseInt(e.target.value)||0;setInitCash(v);setShared(s=>({...s,initCash:v}));}}/>
+              </div>
+            )}
+          </div>
+
+          {/* 🔔 현재 이벤트 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.black}}>🔔 현재 이벤트</div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {shared.activeEvent&&<Btn onClick={clearEvent} color={G.redLight} textColor={G.red} style={{padding:"4px 10px",fontSize:11}}>제거</Btn>}
+                {shared.scheduledEvent&&<Btn onClick={cancelScheduledEvent} color={G.redLight} textColor={G.red} style={{padding:"4px 10px",fontSize:11}}>예약취소</Btn>}
+              </div>
+            </div>
+            {shared.activeEvent&&(
+              <div style={{background:G.orangeLight,borderRadius:8,padding:"8px 10px",marginBottom:8,border:`1.5px solid ${G.orange}`,fontSize:12,fontWeight:700,color:G.orange}}>
+                진행중: {shared.activeEvent.emoji} {shared.activeEvent.name}
+              </div>
+            )}
+            {shared.scheduledEvent&&(()=>{
+              const s2=Math.max(0,Math.ceil((shared.scheduledEvent.fireAt-Date.now())/1000));
+              return <div style={{background:"#fff3cd",borderRadius:8,padding:"8px 10px",marginBottom:8,border:"1.5px solid #ffc107",fontSize:12,fontWeight:600,color:"#856404"}}>
+                예약: {shared.scheduledEvent.event.emoji} {shared.scheduledEvent.event.name} → {s2}초 후
+              </div>;
+            })()}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"6px 10px",background:G.bg,borderRadius:8}}>
+              <div style={{fontSize:11,color:G.gray1}}>지연초</div>
+              <input type="number" min="0" max="300" value={eventDelay}
+                onChange={e=>setEventDelay(Math.max(0,parseInt(e.target.value)||0))}
+                style={{width:56,padding:"3px 6px",border:`1px solid ${G.border}`,borderRadius:6,fontSize:12,textAlign:"center"}}/>
+              <div style={{fontSize:11,color:G.gray1}}>{eventDelay===0?"(즉시)":"(예약)"}</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
               {(shared.eventPresets||eventPresets).map(ev=>(
-                <div key={ev.id} onClick={()=>applyEvent(ev)}
-                  style={{background:G.bg,borderRadius:10,padding:"10px",cursor:"pointer",
-                    border:`1.5px solid ${shared.activeEvent?.id===ev.id?G.orange:G.border}`,transition:"all .15s"}}>
-                  <div style={{fontSize:18,marginBottom:3}}>{ev.emoji}</div>
-                  <div style={{fontSize:12,fontWeight:700,color:G.black,marginBottom:2}}>{ev.name}</div>
-                  <div style={{fontSize:11,fontWeight:600,color:ev.globalEffect>=0?G.red:G.blue}}>{ev.globalEffect>=0?"+":""}{ev.globalEffect}%</div>
+                <div key={ev.id} onClick={()=>eventDelay>0?scheduleEvent(ev,eventDelay):applyEvent(ev)}
+                  style={{background:G.bg,borderRadius:8,padding:"8px",cursor:"pointer",
+                    border:`1.5px solid ${shared.activeEvent?.id===ev.id?G.orange:shared.scheduledEvent?.event?.id===ev.id?"#ffc107":G.border}`,transition:"all .15s"}}>
+                  <div style={{fontSize:16,marginBottom:2}}>{ev.emoji}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:G.black,marginBottom:1,lineHeight:1.3}}>{ev.name}</div>
+                  {ev.triggerAtRound&&<div style={{fontSize:10,color:G.gray2}}>R{ev.triggerAtRound} {ev.triggerAtSecond}s</div>}
+                  <div style={{fontSize:11,fontWeight:600,color:ev.globalEffect>=0?G.red:G.blue}}>
+                    {ev.globalEffect!==0?(ev.globalEffect>=0?"+":"")+ev.globalEffect+"%":
+                      Object.entries(ev.stockEffects||{}).slice(0,2).map(([,v])=>(v>=0?"+":"")+v+"%").join(" ")}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <Btn onClick={()=>{if(!window.confirm("게임을 초기화합니다.\n모든 팀의 자산·거래내역이 초기화됩니다.\n설정과 팀 등록 정보는 유지됩니다.\n계속하시겠습니까?")) return; resetGame();}} color={G.redLight} textColor={G.red} style={{width:"100%",padding:"12px",fontSize:13}}>🔄 게임 초기화 (설정·팀 유지)</Btn>
+          {/* 📢 공지 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:G.black,marginBottom:8}}>📢 전체 공지</div>
+            <div style={{display:"flex",gap:8}}>
+              <TextInput value={noticeInput} onChange={e=>setNoticeInput(e.target.value)} placeholder="전체 팀에게 보낼 공지" style={{flex:1}}/>
+              <Btn onClick={()=>{setShared(s=>({...s,notice:noticeInput,noticeAt:Date.now()}));t2("공지 전송");}} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
+            </div>
+            {shared.notice&&<div style={{fontSize:11,color:G.blue,background:G.blueLight,borderRadius:8,padding:"6px 10px",marginTop:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>{shared.notice}</span>
+              <span onClick={()=>{setShared(s=>({...s,notice:"",noticeAt:null}));setNoticeInput("");}} style={{cursor:"pointer",color:G.red,marginLeft:8,fontWeight:700}}>×</span>
+            </div>}
+          </div>
+
+          {/* 💡 힌트 / 규칙 */}
+          <div style={{background:G.white,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",gap:0,marginBottom:10,borderBottom:`1.5px solid ${G.border}`}}>
+              {[["hint","💡 종가 힌트"],["rules","📋 게임 규칙"]].map(([key,label])=>(
+                <div key={key} onClick={()=>setControlHintTab(key)}
+                  style={{flex:1,textAlign:"center",padding:"6px 0",fontSize:12,fontWeight:600,cursor:"pointer",
+                    color:controlHintTab===key?G.blue:G.gray1,
+                    borderBottom:`2px solid ${controlHintTab===key?G.blue:"transparent"}`,marginBottom:-1.5}}>
+                  {label}
+                </div>
+              ))}
+            </div>
+            {controlHintTab==="hint"&&<>
+              <textarea value={resultHintInput} onChange={e=>setResultHintInput(e.target.value)}
+                placeholder="종가 확인 단계에서 팀원에게 공개될 힌트" rows={3}
+                style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,padding:"9px 10px",
+                  fontSize:13,fontFamily:"inherit",outline:"none",color:G.black,boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}/>
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                <Btn onClick={()=>{setShared(s=>({...s,resultHint:resultHintInput}));t2("힌트 저장됨");}} style={{flex:1,padding:"9px",fontSize:12}}>저장</Btn>
+                <Btn onClick={()=>{setShared(s=>({...s,resultHint:""}));setResultHintInput("");t2("힌트 삭제됨");}} color={G.redLight} textColor={G.red} style={{flex:1,padding:"9px",fontSize:12}}>삭제</Btn>
+              </div>
+            </>}
+            {controlHintTab==="rules"&&<>
+              <textarea value={rulesInput} onChange={e=>setRulesInput(e.target.value)}
+                placeholder={"예) 1. 매수·매도는 라운드 진행 중에만 가능\n2. 수수료율 0.1%"} rows={5}
+                style={{width:"100%",border:`1.5px solid ${G.border}`,borderRadius:8,padding:"9px 10px",
+                  fontSize:13,fontFamily:"inherit",outline:"none",color:G.black,boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}/>
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                <Btn onClick={()=>{setShared(s=>({...s,rules:rulesInput}));t2("규칙 저장됨");}} style={{flex:1,padding:"9px",fontSize:12}}>저장</Btn>
+                <Btn onClick={()=>{setShared(s=>({...s,rules:""}));setRulesInput("");t2("규칙 삭제됨");}} color={G.redLight} textColor={G.red} style={{flex:1,padding:"9px",fontSize:12}}>삭제</Btn>
+              </div>
+            </>}
+          </div>
+
+          {/* 💬 채팅 (접기) */}
+          <div style={{background:G.white,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
+            <div onClick={()=>setChatOpen(v=>!v)}
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:14,cursor:"pointer"}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.black}}>💬 채팅 관리</div>
+              <div style={{fontSize:12,color:G.gray1}}>{chatOpen?"▲":"▼"}</div>
+            </div>
+            {chatOpen&&<div style={{padding:"0 14px 14px"}}>
+              {(()=>{
+                const sendAdminChat=()=>{
+                  const text=adminChatInput.trim();
+                  if(!text){t2("메시지를 입력하세요");return;}
+                  const msg={id:uid(),teamName:"🛠 운영자",text,ts:Date.now()};
+                  setShared(s=>({...s,chatMessages:[...(Array.isArray(s.chatMessages)?s.chatMessages:[]),msg].slice(-200)}));
+                  setAdminChatInput("");
+                  t2("채팅 전송됨");
+                };
+                return <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <TextInput value={adminChatInput} onChange={e=>setAdminChatInput(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&sendAdminChat()} placeholder="운영자로 채팅 (Enter)" style={{flex:1}}/>
+                  <Btn onClick={sendAdminChat} style={{flexShrink:0,padding:"9px 12px",fontSize:12}}>전송</Btn>
+                </div>;
+              })()}
+              <div style={{maxHeight:160,overflowY:"auto",marginBottom:8}}>
+                {(shared.chatMessages||[]).length===0
+                  ?<div style={{textAlign:"center",color:G.gray2,fontSize:12,padding:"10px 0"}}>채팅 없음</div>
+                  :[...(shared.chatMessages||[])].reverse().map(msg=>(
+                    <div key={msg.id} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"5px 0",borderBottom:`1px solid ${G.border}`}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <span style={{fontSize:11,fontWeight:600,color:msg.teamName==="🛠 운영자"?G.orange:G.blue}}>{msg.teamName}</span>
+                        <span style={{fontSize:11,color:G.gray1,marginLeft:4}}>{new Date(msg.ts).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})}</span>
+                        <div style={{fontSize:12,color:G.black,wordBreak:"break-all",marginTop:1}}>{msg.text}</div>
+                      </div>
+                      <div onClick={()=>{
+                        setShared(s=>({...s,chatMessages:(Array.isArray(s.chatMessages)?s.chatMessages:[]).filter(m=>m.id!==msg.id)}));
+                        t2("메시지 삭제됨");
+                      }}
+                        style={{width:20,height:20,borderRadius:5,background:G.redLight,color:G.red,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>×</div>
+                    </div>
+                  ))
+                }
+              </div>
+              {(shared.chatMessages||[]).length>0&&(
+                <Btn onClick={()=>{
+                  if(!window.confirm("채팅 전체를 삭제할까요?")) return;
+                  setShared(s=>({...s,chatMessages:["_empty"]}));
+                  t2("채팅 전체 삭제됨");
+                }}
+                  color={G.redLight} textColor={G.red} style={{width:"100%",padding:"8px",fontSize:11}}>🗑 전체 삭제</Btn>
+              )}
+            </div>}
+          </div>
+
+          {/* 📋 종목 상장·폐지 (접기) */}
+          <div style={{background:G.white,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
+            <div onClick={()=>setStockOpen(v=>!v)}
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:14,cursor:"pointer"}}>
+              <div style={{fontSize:13,fontWeight:700,color:G.black}}>📋 종목 상장·폐지</div>
+              <div style={{fontSize:12,color:G.gray1}}>{stockOpen?"▲":"▼"}</div>
+            </div>
+            {stockOpen&&<div style={{padding:"0 14px 14px"}}>
+              {(shared.stocks||[]).map(st=>(
+                <div key={st.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${G.border}`}}>
+                  <span style={{fontSize:16}}>{st.emoji}</span>
+                  <span style={{flex:1,fontSize:12,fontWeight:600,color:st.listed!==false?G.black:G.gray2,textDecoration:st.listed===false?"line-through":"none"}}>{st.name}</span>
+                  <span style={{fontSize:10,color:st.listed!==false?G.green:G.red,fontWeight:600,marginRight:4}}>{st.listed!==false?"상장":"폐지"}</span>
+                  {st.listed!==false
+                    ?<Btn onClick={()=>delistStock(st.id)} color={G.redLight} textColor={G.red} style={{padding:"4px 8px",fontSize:10}}>폐지</Btn>
+                    :<Btn onClick={()=>relistStock(st.id)} color={G.greenLight} textColor={G.green} style={{padding:"4px 8px",fontSize:10}}>재상장</Btn>}
+                </div>
+              ))}
+            </div>}
+          </div>
+
+          {/* 🔴 게임 초기화 */}
+          <Btn onClick={()=>{if(!window.confirm("게임을 초기화하겠습니다.\n모든 주문·보유·잔액이 초기화됩니다.\n설정과 참가자 정보는 유지됩니다.\n계속하시겠습니까?")) return; resetGame();}} color={G.redLight} textColor={G.red} style={{width:"100%",padding:"12px",fontSize:13}}>🔴 게임 초기화 (설정·참가자 유지)</Btn>
+
         </>}
 
-        {/* ══ 설정 탭 ══ */}
+                {/* ══ 설정 탭 ══ */}
         {tab==="settings"&&<>
           <div style={{background:G.white,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
             <div style={{display:"flex",overflowX:"auto"}}>
