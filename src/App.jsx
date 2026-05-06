@@ -773,7 +773,7 @@ const INIT_SS={
   rules: "",
 };
 
-const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, initCash = DEFAULT_INIT_CASH, teamCashMode = false, teamCash = 0, groupCash = {}) => {
+const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, initCash = DEFAULT_INIT_CASH, teamCashMode = false, teamCash = 0, groupCash = {}, groups = {}) => {
   const groupCounts = {};
   if (teamCashMode) {
     for (const cred of Object.values(teamCredentials || {})) {
@@ -788,10 +788,17 @@ const buildFreshTeamsFromCreds = (teamCredentials = {}, existingTeams = {}, init
     const existingPoints = existingTeams?.[id]?.diamonds || 0;
     let playerCash = initCash;
     if (teamCashMode && groupName) {
-      // 조별 개별 자금 우선, 없으면 teamCash 공통값
       const thisGroupCash = (groupCash?.[groupName] > 0 ? groupCash[groupName] : null) ?? (teamCash > 0 ? teamCash : null);
       if (thisGroupCash > 0) {
-        playerCash = Math.floor(thisGroupCash / (groupCounts[groupName] || 1));
+        if (initCash > 0) {
+          // 조원 1인당 initCash, 합산 미달분은 조장에게
+          const cnt = groupCounts[groupName] || 1;
+          const remainder = Math.max(0, thisGroupCash - initCash * cnt);
+          const leaderName = groups?.[groupName]?.leader;
+          playerCash = initCash + (leaderName && name === leaderName && remainder > 0 ? remainder : 0);
+        } else {
+          playerCash = Math.floor(thisGroupCash / (groupCounts[groupName] || 1));
+        }
       }
     }
     freshTeams[id] = {
@@ -2055,7 +2062,7 @@ function AdminApp({onBack=null}){
       minBet: tpl.betMinAmount ?? 100000,
       maxBetPct: tpl.betMaxRatio ?? 50,
       betWindow: tpl.betDuration ?? 30,
-      teams: buildFreshTeamsFromCreds(ss.teamCredentials || {}, ss.teams || {}, nextInitCash, tpl.teamCashMode || false, tpl.teamCash || 0, (()=>{const gc={...(tpl.groupCash||{})};if(tpl.teamCashMode&&tpl.teamCash>0){for(const c of Object.values(ss.teamCredentials||{})){if(c.groupName&&!gc[c.groupName])gc[c.groupName]=tpl.teamCash;}}return gc;})()),
+      teams: buildFreshTeamsFromCreds(ss.teamCredentials || {}, ss.teams || {}, nextInitCash, tpl.teamCashMode || false, tpl.teamCash || 0, (()=>{const gc={...(tpl.groupCash||{})};if(tpl.teamCashMode&&tpl.teamCash>0){for(const c of Object.values(ss.teamCredentials||{})){if(c.groupName&&!gc[c.groupName])gc[c.groupName]=tpl.teamCash;}}return gc;})(), ss.groups || {}),
       phase: "ready",
       round: 0,
       roundStartedAt: null,
@@ -2147,13 +2154,26 @@ function AdminApp({onBack=null}){
     const total=(s.groupCash?.[groupName]>0?s.groupCash[groupName]:null)
       ??(s.teamCash>0?s.teamCash:null);
     if(!total||total<=0) return updatedTeams;
-    const members=Object.values(updatedCreds||{}).filter(c=>c.groupName===groupName);
-    if(members.length===0) return updatedTeams;
-    const pp=Math.floor(total/members.length);
+    const entries=Object.entries(updatedCreds||{}).filter(([,c])=>c.groupName===groupName);
+    if(entries.length===0) return updatedTeams;
     const teams={...updatedTeams};
-    members.forEach(cred=>{
-      if(teams[cred.id]) teams[cred.id]={...teams[cred.id],cash:pp,initCash:pp};
-    });
+    if(s.teamCashMode&&s.initCash>0){
+      // 조원 1인당 initCash, 합산이 total 미만이면 나머지는 조장에게
+      const perMember=s.initCash;
+      const leaderName=s.groups?.[groupName]?.leader;
+      const remainder=Math.max(0,total-perMember*entries.length);
+      entries.forEach(([name,cred])=>{
+        if(!teams[cred.id]) return;
+        const cash=perMember+(leaderName&&name===leaderName&&remainder>0?remainder:0);
+        teams[cred.id]={...teams[cred.id],cash,initCash:cash};
+      });
+    } else {
+      // 균등 분배
+      const pp=Math.floor(total/entries.length);
+      entries.forEach(([,cred])=>{
+        if(teams[cred.id]) teams[cred.id]={...teams[cred.id],cash:pp,initCash:pp};
+      });
+    }
     return teams;
   };
 
