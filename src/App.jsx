@@ -769,10 +769,10 @@ function useAutoEventAndHistory(shared) {
           };
           if (ev.duration > 0) {
             setTimeout(() => {
-              setShared(ss => ({
-                ...ss, activeEvent: null,
-                ...(ev.affectTarget === false ? { eventFadeOut: { stockEffects: ev.stockEffects, globalEffect: ev.globalEffect, endedAt: Date.now(), fadeDuration: 60000 } } : {}),
-              }));
+              const fadeUpd = ev.affectTarget === false
+                ? { activeEvent: null, eventFadeOut: { stockEffects: ev.stockEffects, globalEffect: ev.globalEffect, endedAt: Date.now(), fadeDuration: 60000 } }
+                : { activeEvent: null };
+              update(GAME_REF, fadeUpd);
             }, ev.duration * 1000);
           }
         }
@@ -812,13 +812,10 @@ function useAutoEventAndHistory(shared) {
         };
         if (ev.duration > 0) {
           setTimeout(() => {
-            setShared(ss => ({
-              ...ss,
-              activeEvent: null,
-              ...(ev.affectTarget === false ? {
-                eventFadeOut: { stockEffects: ev.stockEffects, globalEffect: ev.globalEffect, endedAt: Date.now(), fadeDuration: 60000 }
-              } : {}),
-            }));
+            const fadeUpd = ev.affectTarget === false
+              ? { activeEvent: null, eventFadeOut: { stockEffects: ev.stockEffects, globalEffect: ev.globalEffect, endedAt: Date.now(), fadeDuration: 60000 } }
+              : { activeEvent: null };
+            update(GAME_REF, fadeUpd);
           }, ev.duration * 1000);
         }
       }
@@ -861,7 +858,7 @@ function useAutoEventAndHistory(shared) {
             };
             if (ev.duration > 0) {
               setTimeout(() => {
-                setShared(ss => ({ ...ss, activeEvent: null }));
+                update(GAME_REF, { activeEvent: null });
               }, ev.duration * 1000);
             }
           } else {
@@ -871,11 +868,8 @@ function useAutoEventAndHistory(shared) {
       }
 
       if (Object.keys(eventUpdate).length > 0) {
-        setShared(ss => {
-          const result = { ...ss, ...eventUpdate };
-          if (ss.teams) result.teams = ss.teams;
-          return result;
-        });
+        // teams 제외하고 변경 필드만 직접 update → 전체 재전파 방지
+        update(GAME_REF, removeUndefined(eventUpdate));
       }
     }, 2000);
 
@@ -4048,7 +4042,12 @@ function UserApp({previewAs=null,onBack=null}){
       if (!cur.purchases) cur.purchases = [];
       if (cur.holdings?._empty) cur.holdings = {};
       const updated = fn(cur);
-      await fbSet(TEAM_REF(teamId), removeUndefined(updated));
+      // history 최대 50개 유지 (페이로드 크기 제어)
+      if (Array.isArray(updated.history) && updated.history.length > 50) {
+        updated.history = updated.history.slice(-50);
+      }
+      // fbSet 대신 update: 다른 경로(/game/*)와 동시 충돌 방지
+      await update(TEAM_REF(teamId), removeUndefined(updated));
     } catch(e) {
       console.error("updTeam error:", e);
     }
