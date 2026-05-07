@@ -4847,27 +4847,36 @@ function UserApp({previewAs=null,onBack=null}){
               <div style={{fontSize:11,color:G.orange,fontWeight:600}}>⚡ 차입금: {fmt(borrowed)}</div>
             </div>}
           </div>
-          <div style={{padding:"12px 18px 6px",fontSize:12,color:G.gray2,fontWeight:500}}>보유 종목</div>
-          {(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).length===0
-            ?<div style={{background:G.white,textAlign:"center",color:G.gray2,padding:"36px 0",fontSize:14}}>보유 종목 없음</div>
-            :(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).map(st=>{
-              const h=holdings[st.id];
-              const cur=getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots,shared.phase);
-              const ev2=cur*h.qty,pnl=ev2-h.avgPrice*h.qty;
-              return(
-                <div key={st.id} onClick={()=>{setDetailSafe(st);setOrderSide("sell");setQty(1);setLeverage(1);setScreen("detail");}}
-                  style={{background:G.white,padding:"13px 18px",borderBottom:`1px solid ${G.border}`,cursor:"pointer"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                    <div style={{fontSize:14,fontWeight:700,color:G.black}}>{st.emoji} {st.name}</div>
-                    <div style={{fontSize:14,fontWeight:700,color:pnl>=0?G.red:G.blue}}>{pnl>=0?"+":""}{fmt(pnl)}</div>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between"}}>
-                    <span style={{fontSize:12,color:G.gray1}}>{h.qty}주 · 평단 {fmtN(h.avgPrice)}</span>
-                    <span style={{fontSize:12,color:G.gray1}}>평가 {fmt(ev2)}</span>
-                  </div>
-                </div>
-              );
-            })
+          {isBettingPhase
+            ?<div style={{background:G.white,textAlign:"center",color:G.gray2,padding:"36px 24px",fontSize:13}}>
+               <div style={{fontSize:28,marginBottom:8}}>🎲</div>
+               <div style={{fontWeight:700,color:G.black,marginBottom:4}}>베팅 진행 중</div>
+               <div>종목 정보는 라운드 시작 후 공개됩니다</div>
+             </div>
+            :<>
+              <div style={{padding:"12px 18px 6px",fontSize:12,color:G.gray2,fontWeight:500}}>보유 종목</div>
+              {(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).length===0
+                ?<div style={{background:G.white,textAlign:"center",color:G.gray2,padding:"36px 0",fontSize:14}}>보유 종목 없음</div>
+                :(shared.stocks||[]).filter(st=>holdings[st.id]?.qty>0).map(st=>{
+                  const h=holdings[st.id];
+                  const cur=getCurrentPrice(st,round,shared.roundStartedAt,shared.roundEndsAt,shared.activeEvent,shared.modifiedTargets,shared.eventSnapshots,shared.phase);
+                  const ev2=cur*h.qty,pnl=ev2-h.avgPrice*h.qty;
+                  return(
+                    <div key={st.id} onClick={()=>{setDetailSafe(st);setOrderSide("sell");setQty(1);setLeverage(1);setScreen("detail");}}
+                      style={{background:G.white,padding:"13px 18px",borderBottom:`1px solid ${G.border}`,cursor:"pointer"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <div style={{fontSize:14,fontWeight:700,color:G.black}}>{st.emoji} {st.name}</div>
+                        <div style={{fontSize:14,fontWeight:700,color:pnl>=0?G.red:G.blue}}>{pnl>=0?"+":""}{fmt(pnl)}</div>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}>
+                        <span style={{fontSize:12,color:G.gray1}}>{h.qty}주 · 평단 {fmtN(h.avgPrice)}</span>
+                        <span style={{fontSize:12,color:G.gray1}}>평가 {fmt(ev2)}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              }
+            </>
           }
         </>}
 
