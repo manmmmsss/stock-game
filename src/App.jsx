@@ -1537,6 +1537,14 @@ function AdminApp({onBack=null}){
   const [tab,setTab]=useState("control");
   const [settingsTab,setSettingsTab]=useState("template");
   const [tlTick,setTlTick]=useState(0); // 타임라인 자동 진행 트리거
+  const [adminStepRem,setAdminStepRem]=useState(null);
+  useEffect(()=>{
+    if(!shared.timelineEndsAt){setAdminStepRem(null);return;}
+    const tick=()=>setAdminStepRem(Math.max(0,Math.round((shared.timelineEndsAt-Date.now())/1000)));
+    tick();
+    const id=setInterval(tick,1000);
+    return()=>clearInterval(id);
+  },[shared.timelineEndsAt]);
   const [toast,setToast]=useState({msg:"",show:false});
   const t2=msg=>showToast(setToast,msg);
 
@@ -2560,9 +2568,6 @@ function AdminApp({onBack=null}){
                 const steps = shared.timelineSteps || INIT_SS.timelineSteps;
                 const idx = shared.timelineIndex ?? -1;
                 const step = steps[idx];
-                const rem = shared.timelineEndsAt
-                  ? Math.max(0, Math.round((shared.timelineEndsAt - Date.now()) / 1000))
-                  : 0;
                 const isWaiting = idx < 0;
                 return (
                   <div>
@@ -2570,7 +2575,7 @@ function AdminApp({onBack=null}){
                       {isWaiting ? `첫 단계: ${steps[0]?.label || ""}` : (step ? step.label : "준비 중...")}
                     </div>
                     {!isWaiting && <div style={{fontSize:22,fontWeight:800,color:G.green,fontFamily:"monospace",marginBottom:8}}>
-                      {secToStr(rem)}
+                      {secToStr(adminStepRem??0)}
                     </div>}
                     <div style={{display:"flex",gap:6}}>
                       {isWaiting ? (
@@ -4217,9 +4222,14 @@ function UserApp({previewAs=null,onBack=null}){
   // 타임라인 현재 단계 — 모든 화면에서 공유
   const _tlSteps = shared.timelineSteps || INIT_SS.timelineSteps;
   const curStep = _tlSteps[shared.timelineIndex ?? -1];
-  const stepRem = shared.timelineEndsAt
-    ? Math.max(0, Math.round((shared.timelineEndsAt - Date.now()) / 1000))
-    : null;
+  const [stepRem, setStepRem] = useState(null);
+  useEffect(() => {
+    if (!shared.timelineEndsAt) { setStepRem(null); return; }
+    const tick = () => setStepRem(Math.max(0, Math.round((shared.timelineEndsAt - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [shared.timelineEndsAt]);
   const isBettingPhase =
     shared.currentPhaseDetail === "betting"
     && !!shared.betDeadline
