@@ -1613,35 +1613,35 @@ function AdminApp({onBack=null}){
     return()=>clearInterval(id);
   },[shared.phase,shared.breakEndsAt,shared.betDeadline]);
 
-  // 자동 타임라인 진행
+  // 자동 타임라인 진행 — setShared(get+write) 대신 update(변경 필드만) 직접 호출로 즉시 전환
   useEffect(() => {
     if (!shared.timelineAuto) return;
-    // 첫 단계는 수동 시작 대기 (timelineReadyToStart가 true일 때만 첫 단계 허용)
     if ((shared.timelineIndex ?? -1) < 0 && !shared.timelineReadyToStart) return;
-    // 아직 대기 중: timelineEndsAt 만료 시각에 tlTick 증가 → 이 effect 재실행
     if (shared.timelineEndsAt && Date.now() < shared.timelineEndsAt) {
-      const delay = Math.max(shared.timelineEndsAt - Date.now() + 300, 200);
+      const delay = Math.max(shared.timelineEndsAt - Date.now() + 100, 100);
       const tid = setTimeout(() => setTlTick(t => t + 1), delay);
       return () => clearTimeout(tid);
     }
+
     const steps = shared.timelineSteps || INIT_SS.timelineSteps;
     const nextIdx = (shared.timelineIndex ?? -1) + 1;
     if (nextIdx >= steps.length) {
-      setShared(s => ({ ...s, timelineAuto: false, phase: "ended" }));
+      update(GAME_REF, { timelineAuto: false, phase: "ended" });
       return;
     }
+
     const step = steps[nextIdx];
-    const endsAt = Date.now() + step.duration * 1000;
     const now = Date.now();
-    const baseUpdates = {
+    const endsAt = now + step.duration * 1000;
+    const base = {
       timelineIndex: nextIdx,
       timelineEndsAt: endsAt,
       currentPhaseDetail: step.type,
-      timelineReadyToStart: false, // 첫 단계 진입 후 플래그 초기화
+      timelineReadyToStart: false,
     };
 
     if (step.type === "betting") {
-      setShared(s => ({ ...s, ...baseUpdates, betDeadline: endsAt, betOdds: {} }));
+      update(GAME_REF, { ...base, betDeadline: endsAt, betOdds: {} });
       return;
     }
 
@@ -1651,99 +1651,110 @@ function AdminApp({onBack=null}){
         const ev = autoEvts[0];
         return now + (ev.triggerIntervalMin||1)*60*1000 + Math.random()*((ev.triggerIntervalMax||3)-(ev.triggerIntervalMin||1))*60*1000;
       })() : null;
-      const roundUpdates = {
-        ...baseUpdates,
+      const roundBase = {
+        ...base,
         phase: "round", round: step.round,
         roundStartedAt: now, roundEndsAt: endsAt,
         betDeadline: 0,
         priceHistory: {}, modifiedTargets: {}, eventSnapshots: {},
-        nextAutoEventAt,
+        ...(nextAutoEventAt ? { nextAutoEventAt } : {}),
       };
-      setShared(s => {
-        const baseState = { ...s, ...roundUpdates };
-        const { nextState } = applyScheduledDelistings(baseState, step.round, "roundStart");
-        return nextState;
-      });
+      // 자동 상장폐지 체크 (변경 있을 때만 추가 기록)
+      const { nextState, delistedNames } = applyScheduledDelistings({ ...shared, ...roundBase }, step.round, "roundStart");
+      const flatUp = { ...roundBase };
+      if (delistedNames.length > 0) {
+        flatUp.stocks = nextState.stocks;
+        flatUp.notice = nextState.notice;
+        flatUp.noticeAt = nextState.noticeAt;
+        for (const [tid, tm] of Object.entries(nextState.teams || {})) {
+          const orig = shared.teams?.[tid];
+          if (orig && (tm.cash !== orig.cash || JSON.stringify(tm.holdings) !== JSON.stringify(orig.holdings))) {
+            flatUp[`teams/${tid}`] = removeUndefined(tm);
+          }
+        }
+      }
+      update(GAME_REF, removeUndefined(flatUp));
       return;
     }
 
     if (step.type === "result") {
       const isLast = nextIdx === steps.length - 1;
       const r = step.round;
-      setShared(s => {
-        const rc = (s.rounds || [])[r - 1];
-        const divs = rc?.dividends || {};
-        let teams = { ...s.teams };
+      const rc = (shared.rounds || [])[r - 1];
+      const divs = rc?.dividends || {};
+      const changedTeams = {};
+      const newBetsForRound = {};
 
-        // 베팅 정산
-        const roundBets = s.bets?.[r] || {};
-        const newBetsForRound = {};
-        if (s.betEnabled && Object.keys(roundBets).length > 0) {
-          for (const [tid, teamBets] of Object.entries(roundBets)) {
-            if (!teams[tid]) continue;
-            let payout = 0;
-            const settledTeamBets = {};
-            for (const [sid, bet] of Object.entries(teamBets)) {
-              if (!bet || bet.settled) { settledTeamBets[sid] = bet; continue; }
-              const stock = s.stocks?.find(x => x.id === sid);
-              if (!stock) { settledTeamBets[sid] = bet; continue; }
-              const startP = getRoundStartPrice(stock, r);
-              const endP = getRoundClosePrice(stock, r);
-              const actualDir = endP > startP ? "up" : endP < startP ? "down" : "draw";
-              const success = actualDir === bet.direction && actualDir !== "draw";
-              const betPayout = success ? Math.round(bet.amount * (bet.odds || s.baseOdds || 1.8)) : 0;
-              payout += betPayout;
-              settledTeamBets[sid] = { ...bet, settled: true, success, payout: betPayout };
-            }
-            newBetsForRound[tid] = settledTeamBets;
-            if (payout > 0) {
-              const tm = teams[tid];
-              const hist = Array.isArray(tm.history) ? tm.history : Object.values(tm.history || {});
-              teams[tid] = { ...tm, diamonds: (tm.diamonds||0) + payout,
-                history: [...hist, { time: new Date().toLocaleTimeString('ko-KR'), type: 'bet', stockName: `R${r} 베팅 정산`, stockEmoji: '🎲', qty: 0, price: 0, total: payout }] };
-            }
+      // 베팅 정산 (당첨 팀만 기록)
+      if (shared.betEnabled && shared.bets?.[r]) {
+        for (const [tid, teamBets] of Object.entries(shared.bets[r])) {
+          const tm = shared.teams?.[tid];
+          if (!tm) continue;
+          let payout = 0;
+          const settledTeamBets = {};
+          for (const [sid, bet] of Object.entries(teamBets)) {
+            if (!bet || bet.settled) { settledTeamBets[sid] = bet; continue; }
+            const stock = (shared.stocks || []).find(x => x.id === sid);
+            if (!stock) { settledTeamBets[sid] = bet; continue; }
+            const startP = getRoundStartPrice(stock, r);
+            const endP = getRoundClosePrice(stock, r);
+            const actualDir = endP > startP ? "up" : endP < startP ? "down" : "draw";
+            const success = actualDir === bet.direction && actualDir !== "draw";
+            const betPayout = success ? Math.round(bet.amount * (bet.odds || shared.baseOdds || 1.8)) : 0;
+            payout += betPayout;
+            settledTeamBets[sid] = { ...bet, settled: true, success, payout: betPayout };
+          }
+          newBetsForRound[tid] = settledTeamBets;
+          if (payout > 0) {
+            const hist = Array.isArray(tm.history) ? tm.history : Object.values(tm.history || {});
+            changedTeams[tid] = { ...tm, diamonds: (tm.diamonds||0) + payout,
+              history: [...hist, { time: new Date().toLocaleTimeString('ko-KR'), type: 'bet', stockName: `R${r} 베팅 정산`, stockEmoji: '🎲', qty: 0, price: 0, total: payout }] };
           }
         }
+      }
 
-        // 배당금 지급
-        for (const [tid, tm] of Object.entries(teams)) {
+      // 배당금 지급 (보유 팀만 기록)
+      if (Object.keys(divs).length > 0) {
+        for (const [tid, tm] of Object.entries(shared.teams || {})) {
           let bonus = 0;
           for (const [sid, perShare] of Object.entries(divs)) {
-            const qty = tm.holdings?.[sid]?.qty || 0;
-            bonus += qty * perShare;
+            bonus += (tm.holdings?.[sid]?.qty || 0) * perShare;
           }
           if (bonus > 0) {
-            const hist = Array.isArray(tm.history) ? tm.history : Object.values(tm.history || {});
-            teams[tid] = { ...tm, cash: tm.cash + bonus,
+            const base2 = changedTeams[tid] || tm;
+            const hist = Array.isArray(base2.history) ? base2.history : Object.values(base2.history || {});
+            changedTeams[tid] = { ...base2, cash: (base2.cash||0) + bonus,
               history: [...hist, { time: new Date().toLocaleTimeString('ko-KR'), type: 'dividend', stockName: '배당금', stockEmoji: '💰', qty: 0, price: 0, total: bonus }] };
           }
         }
+      }
 
-        // 이벤트로 수정된 종가를 stock.prices에 반영 → 다음 라운드 시작가 연속성 보장
-        const nextStocks = (s.stocks || []).map(stock => {
-          const mod = s.modifiedTargets?.[stock.id];
-          if (mod && mod.round === r) {
-            const newPrices = [...stock.prices];
-            newPrices[r - 1] = mod.modifiedPrice;
-            return { ...stock, prices: newPrices };
-          }
-          return stock;
-        });
-
-        return {
-          ...s, ...baseUpdates,
-          phase: isLast ? "ended" : "break",
-          roundEndsAt: null, roundStartedAt: null,
-          teams,
-          stocks: nextStocks,
-          bets: { ...(s.bets || {}), [r]: newBetsForRound },
-          betOdds: {},
-        };
+      // 이벤트 수정 종가 반영
+      const nextStocks = (shared.stocks || []).map(stock => {
+        const mod = shared.modifiedTargets?.[stock.id];
+        if (mod && mod.round === r) {
+          const p = [...stock.prices]; p[r - 1] = mod.modifiedPrice;
+          return { ...stock, prices: p };
+        }
+        return stock;
       });
+
+      const flatUp = {
+        ...base,
+        phase: isLast ? "ended" : "break",
+        roundEndsAt: null, roundStartedAt: null,
+        stocks: nextStocks,
+        [`bets/${r}`]: { ...(shared.bets?.[r] || {}), ...newBetsForRound },
+        betOdds: {},
+      };
+      for (const [tid, tm] of Object.entries(changedTeams)) {
+        flatUp[`teams/${tid}`] = removeUndefined(tm);
+      }
+      update(GAME_REF, removeUndefined(flatUp));
       return;
     }
 
-    setShared(s => ({ ...s, ...baseUpdates }));
+    update(GAME_REF, base);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shared.timelineAuto, shared.timelineEndsAt, shared.timelineIndex, shared.timelineReadyToStart, tlTick]);
 
