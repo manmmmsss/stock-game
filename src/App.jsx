@@ -4702,7 +4702,7 @@ function UserApp({previewAs=null,onBack=null}){
                 </div>
               </div>
               {!isLeader&&<div style={{fontSize:12,color:G.gray2,marginBottom:8,padding:"8px 12px",background:G.bg,borderRadius:8}}>조장만 베팅할 수 있습니다. 현황을 확인하세요.</div>}
-              {(shared.stocks||[]).filter(st=>st.listed!==false).map(st=>{
+              {(shared.stocks||[]).filter(st=>st.listed!==false).map((st,si)=>{
                 const nextR=shared.phase==="ready"?1:(shared.round||0)+1;
                 const oddsInfo=shared.betOdds?.[st.id];
                 const upOdds=+(oddsInfo?.upOdds??shared.baseOdds??1.8);
@@ -4715,7 +4715,7 @@ function UserApp({previewAs=null,onBack=null}){
                 return(
                   <div key={st.id} style={{marginBottom:8,background:G.bg,borderRadius:12,padding:"11px 13px"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:myBet||(!canBet)||(!isLeader)?0:8}}>
-                      <div style={{fontSize:13,fontWeight:700,color:G.black}}>{st.emoji} {st.name}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:G.black}}>종목 {si+1}</div>
                       {myBet&&(
                         <div style={{fontSize:11,fontWeight:700,
                           color:myBet.direction==="up"?G.red:G.blue,
